@@ -35,3 +35,4 @@ tfplan
 *.tfstate
 *.tfstate.*
 terraform.tfvars
+*.auto.tfvars

@@ -219,6 +219,121 @@ check_docker_available() {
     return $?
 }
 
+# Check if Infisical API is available
+check_infisical_available() {
+    local host="$1"
+    local port="${2:-8080}"
+    # Check if API responds and returns 200 OK
+    local status_code
+    status_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${host}:${port}/api/status" 2>/dev/null)
+    if [ "$status_code" = "200" ]; then
+        # Also check if bootstrap endpoint is accessible (may return 400/404 if already bootstrapped, but connection works)
+        curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "http://${host}:${port}/api/v1/admin/bootstrap" 2>/dev/null | grep -qE "(200|400|404|405)"
+        return $?
+    fi
+    return 1
+}
+
+# Get infisical_port from terraform.tfvars
+get_infisical_port() {
+    grep -E "^infisical_port\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*\([0-9]*\).*/\1/' | tr -d ' \r\n' || echo "8080"
+}
+
+# Check if bootstrap token exists (now checks for client_id/secret)
+check_bootstrap_token() {
+    [ -f "infisical_token.auto.tfvars" ] && grep -q "infisical_client_id" "infisical_token.auto.tfvars" 2>/dev/null
+    return $?
+}
+
+# Clean up orphaned Docker containers and networks
+cleanup_docker_resources() {
+    local host="$1"
+    
+    log_step "Cleaning up orphaned Docker resources..."
+    
+    # Stop and remove containers in the infisical network
+    ssh -o StrictHostKeyChecking=no "root@$host" "
+        # Find containers connected to infisical network
+        CONTAINERS=\$(docker network inspect infisical --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || echo '')
+        
+        if [ -n \"\$CONTAINERS\" ]; then
+            echo \"Stopping containers: \$CONTAINERS\"
+            for container in \$CONTAINERS; do
+                docker stop \"\$container\" 2>/dev/null || true
+                docker rm -f \"\$container\" 2>/dev/null || true
+            done
+        fi
+        
+        # Force disconnect all containers from network
+        docker network inspect infisical --format '{{range \$key, \$value := .Containers}}{{println \$key}}{{end}}' 2>/dev/null | while read container_id; do
+            if [ -n \"\$container_id\" ]; then
+                docker network disconnect -f infisical \"\$container_id\" 2>/dev/null || true
+            fi
+        done
+        
+        # Force remove network if it exists
+        docker network rm infisical 2>/dev/null || true
+    " || log_warn "Failed to cleanup Docker resources (may not exist)"
+    
+    log_info "Docker cleanup completed."
+}
+
+# Phase 3: Bootstrap Infisical
+bootstrap_infisical() {
+    local host="$1"
+    local port="$2"
+    
+    log_step "Phase 3: Bootstrap Infisical..."
+    
+    # Check if already bootstrapped
+    if check_bootstrap_token; then
+        log_info "Infisical already configured (credentials file exists)."
+        return 0
+    fi
+    
+    # Ensure python3 and venv are available
+    if ! command -v python3 &>/dev/null; then
+        log_error "python3 is required but not installed."
+        return 1
+    fi
+
+    # Setup virtual environment
+    if [ ! -d ".venv" ]; then
+        log_info "Creating Python virtual environment..."
+        python3 -m venv .venv
+    fi
+
+    # Activate venv and install dependencies
+    log_info "Installing Python dependencies..."
+    # shellcheck source=/dev/null
+    source .venv/bin/activate
+    pip install --upgrade pip
+    pip install requests pylint
+
+    # Run pylint on configuration script
+    log_info "Running pylint on configuration script..."
+    if [ -f "scripts/configure_infisical.py" ]; then
+        pylint --disable=C0111,C0103,W0702 scripts/configure_infisical.py || log_warn "Pylint found issues (non-fatal)"
+    fi
+
+    # Run bootstrap via Terraform
+    log_info "Running bootstrap via Terraform (calls configuration script)..."
+    # We target the null_resource that runs the python script
+    # Terraform will use the activated venv because we sourced it
+    if terraform apply -target=null_resource.configure_infisical -auto-approve; then
+        if check_bootstrap_token; then
+            log_info "Bootstrap completed successfully!"
+            return 0
+        else
+            log_error "Bootstrap script finished but credentials file invalid or missing."
+            return 1
+        fi
+    else
+        log_error "Bootstrap failed. Check Terraform output for details."
+        return 1
+    fi
+}
+
 # Update enable_infisical in terraform.tfvars
 set_enable_infisical() {
     local value="$1"
@@ -290,16 +405,83 @@ main() {
         if check_docker_available "$DOCKER_HOST_IP"; then
             log_info "Docker is available via SSH!"
             
+            # Clean up any orphaned Docker resources before applying
+            cleanup_docker_resources "$DOCKER_HOST_IP"
+            
             # Check current state
             CURRENT_STATE=$(get_enable_infisical)
             if [ "$CURRENT_STATE" = "true" ]; then
-                log_info "Infisical already enabled. Running full apply..."
+                log_info "Infisical already enabled."
+                # Check if bootstrap token exists
+                if check_bootstrap_token; then
+                    log_info "Bootstrap token exists. Running full apply..."
+                    terraform apply -auto-approve
+                else
+                    log_info "Bootstrap token missing. Running Phase 2 (containers only)..."
+                    # Use -refresh=false to avoid timeout issues with Docker resources
+                    terraform apply -target=module.infisical -refresh=false -auto-approve || {
+                        log_warn "Apply failed, cleaning up and retrying..."
+                        cleanup_docker_resources "$DOCKER_HOST_IP"
+                        terraform apply -target=module.infisical -auto-approve
+                    }
+                    # Run full apply to sync all resources and eliminate warnings
+                    log_info "Syncing all resources..."
+                    terraform apply -auto-approve
+                fi
             else
-                log_info "Enabling Infisical module (Phase 2)..."
+                log_info "Enabling Infisical module (Phase 2 - containers only)..."
                 set_enable_infisical "true"
+                # Apply only Infisical containers, skip provider-dependent resources
+                # Use -refresh=false to avoid timeout issues with Docker resources
+                terraform apply -target=module.infisical -refresh=false -auto-approve || {
+                    log_warn "Apply failed, cleaning up and retrying..."
+                    cleanup_docker_resources "$DOCKER_HOST_IP"
+                    terraform apply -target=module.infisical -auto-approve
+                }
+                # Run full apply to sync all resources and eliminate warnings
+                log_info "Syncing all resources..."
+                terraform apply -auto-approve
             fi
             
-            terraform apply -auto-approve
+            # Phase 3: Bootstrap Infisical (if not already done)
+            if ! check_bootstrap_token; then
+                INFISICAL_PORT=$(get_infisical_port)
+                bootstrap_infisical "$DOCKER_HOST_IP" "$INFISICAL_PORT"
+            fi
+            
+            # Remove provider and resources files if token is not available to avoid initialization errors
+            if [ -f "infisical_provider.tf" ] && ! check_bootstrap_token; then
+                log_info "Removing Infisical provider (token not available)..."
+                rm -f infisical_provider.tf
+            fi
+            if [ -f "infisical_resources.tf" ] && ! check_bootstrap_token; then
+                log_info "Removing Infisical resources (token not available)..."
+                rm -f infisical_resources.tf
+            fi
+            
+            # Phase 4: Apply final resources (with Infisical provider)
+            if check_bootstrap_token; then
+                log_step "Phase 4: Enabling Infisical provider and applying resources..."
+                # Verify token is actually set in the file
+                if grep -q "infisical_token.*=" infisical_token.auto.tfvars 2>/dev/null && ! grep -q "infisical_token.*=\"\"" infisical_token.auto.tfvars 2>/dev/null; then
+                    # Enable Infisical provider and resources by copying the example files
+                    if [ ! -f "infisical_provider.tf" ] && [ -f "infisical_provider.tf.example" ]; then
+                        cp infisical_provider.tf.example infisical_provider.tf
+                        log_info "Infisical provider enabled."
+                    fi
+                    if [ ! -f "infisical_resources.tf" ] && [ -f "infisical_resources.tf.example" ]; then
+                        cp infisical_resources.tf.example infisical_resources.tf
+                        log_info "Infisical resources enabled."
+                    fi
+                    terraform init -upgrade
+                    terraform apply -auto-approve
+                else
+                    log_warn "Token file exists but token is empty. Skipping Phase 4."
+                    log_info "Run bootstrap manually or check Infisical logs."
+                fi
+            else
+                log_info "Bootstrap not completed yet. Phase 4 skipped."
+            fi
             
             echo ""
             echo "=========================================="
@@ -349,6 +531,16 @@ main() {
                     log_info "Docker is ready! Running Phase 2 automatically..."
                     set_enable_infisical "true"
                     terraform apply -auto-approve
+                    
+                    # Phase 3: Bootstrap Infisical
+                    INFISICAL_PORT=$(get_infisical_port)
+                    bootstrap_infisical "$DOCKER_HOST_IP" "$INFISICAL_PORT"
+                    
+                    # Phase 4: Apply final resources (with Infisical provider)
+                    if check_bootstrap_token; then
+                        log_step "Phase 4: Applying Infisical resources..."
+                        terraform apply -auto-approve
+                    fi
                     
                     echo ""
                     echo "=========================================="

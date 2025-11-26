@@ -45,3 +45,8 @@ provider "docker" {
   host  = "ssh://root@${var.docker_host_ip}"
 }
 
+# Infisical provider for managing secrets
+# This provider is only loaded when infisical_token is available
+# See infisical_provider.tf for the actual provider definition
+# (moved to separate file to allow conditional loading)
+

@@ -14,6 +14,12 @@ resource "docker_network" "infisical" {
   ipam_config {
     subnet = var.network_subnet
   }
+
+  # Force removal even if containers are still connected
+  # This helps with cleanup when containers fail to stop properly
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # PostgreSQL data volume

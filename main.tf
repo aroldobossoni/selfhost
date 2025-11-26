@@ -27,10 +27,10 @@ module "infisical" {
   }
 
   enabled                   = var.enable_infisical
-  postgres_password         = var.infisical_postgres_password
-  infisical_db_password     = var.infisical_db_password
-  infisical_encryption_key  = var.infisical_encryption_key
-  infisical_jwt_signing_key = var.infisical_jwt_signing_key
+  postgres_password         = local.postgres_password
+  infisical_db_password     = local.postgres_password
+  infisical_encryption_key  = local.encryption_key_hex
+  infisical_jwt_signing_key = local.jwt_signing_key
 
   depends_on = [module.docker_lxc]
 }

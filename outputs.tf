@@ -23,4 +23,23 @@ output "infisical_container_id" {
   value       = module.infisical.infisical_container_id
 }
 
+output "infisical_project_name" {
+  description = "Infisical project name (for reference)"
+  value       = var.infisical_project_name
+}
 
+output "infisical_token_available" {
+  description = "Whether Infisical token is available (for reference)"
+  value       = var.infisical_token != ""
+  sensitive   = true
+}
+
+output "infisical_client_id_set" {
+  description = "Whether Infisical Client ID is set"
+  value       = var.infisical_client_id != ""
+}
+
+output "infisical_client_secret_set" {
+  description = "Whether Infisical Client Secret is set"
+  value       = var.infisical_client_secret != ""
+}
