@@ -38,8 +38,6 @@ provider "proxmox" {
   pm_tls_insecure     = var.pm_tls_insecure
 }
 
-provider "docker" {
-  # Only configure if enable_infisical is true, otherwise use dummy config
-  host = var.enable_infisical ? "ssh://root@${var.docker_host_ip}" : null
-}
+# Docker provider is configured inside the infisical module
+# to avoid initialization when module is disabled
 

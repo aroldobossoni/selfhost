@@ -1,3 +1,8 @@
+variable "docker_host" {
+  description = "Docker host connection string (e.g., ssh://root@192.168.3.115)"
+  type        = string
+}
+
 variable "postgres_password" {
   description = "PostgreSQL root password"
   type        = string
