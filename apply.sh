@@ -189,12 +189,12 @@ terraform_init() {
 
 # Get docker_host_ip from terraform.tfvars
 get_docker_host_ip() {
-    grep -E "^docker_host_ip\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*"\(.*\)"/\1/' | tr -d ' '
+    grep -E "^docker_host_ip\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*"\([^"]*\)".*/\1/' | tr -d ' \r\n'
 }
 
 # Get pm_host from terraform.tfvars
 get_pm_host() {
-    grep -E "^pm_host\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*"\(.*\)"/\1/' | tr -d ' '
+    grep -E "^pm_host\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*"\([^"]*\)".*/\1/' | tr -d ' \r\n'
 }
 
 # Get container ID from terraform state
