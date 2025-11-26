@@ -114,8 +114,8 @@ class InfisicalClient:
             log_error(f"Failed to create identity: {e}")
             return None
 
-        # Step 2: Configure Universal Auth
-        log_info("Configuring Universal Auth...")
+        # Step 2: Attach Universal Auth to Identity
+        log_info("Attaching Universal Auth...")
         try:
             resp = requests.post(
                 f"{self.base_url}/api/v1/auth/universal-auth/identities/{identity_id}",
@@ -124,27 +124,53 @@ class InfisicalClient:
                     "clientSecretTrustedIps": [{"ipAddress": "0.0.0.0/0"}],
                     "accessTokenTTL": 7200,
                     "accessTokenMaxTTL": 7200,
-                    "accessTokenNumUsesLimit": 0,
-                    "clientSecretTTL": 0  # Never expires
+                    "accessTokenNumUsesLimit": 0
                 },
                 timeout=30
             )
 
             if resp.status_code not in [200, 201]:
-                log_error(f"Failed to configure Universal Auth: {resp.text}")
+                log_error(f"Failed to attach Universal Auth: {resp.text}")
                 return None
 
-            auth_data = resp.json()
-            log_info("Universal Auth configured successfully!")
+            ua_data = resp.json()["identityUniversalAuth"]
+            client_id = ua_data["clientId"]
+            log_info(f"Universal Auth attached. Client ID: {client_id[:8]}...")
+
+        except RequestException as e:
+            log_error(f"Failed to attach Universal Auth: {e}")
+            return None
+
+        # Step 3: Create Client Secret
+        log_info("Creating Client Secret...")
+        try:
+            resp = requests.post(
+                f"{self.base_url}/api/v1/auth/universal-auth/identities/{identity_id}/client-secrets",
+                headers=headers,
+                json={
+                    "description": "Terraform Controller Secret",
+                    "numUsesLimit": 0,  # Unlimited
+                    "ttl": 0  # Never expires
+                },
+                timeout=30
+            )
+
+            if resp.status_code not in [200, 201]:
+                log_error(f"Failed to create client secret: {resp.text}")
+                return None
+
+            secret_data = resp.json()
+            client_secret = secret_data["clientSecret"]
+            log_info("Client Secret created successfully!")
 
             return {
-                "client_id": auth_data["clientId"],
-                "client_secret": auth_data["clientSecret"],
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "identity_id": identity_id
             }
 
         except RequestException as e:
-            log_error(f"Failed to configure Universal Auth: {e}")
+            log_error(f"Failed to create client secret: {e}")
             return None
 
     def is_bootstrapped(self) -> bool:

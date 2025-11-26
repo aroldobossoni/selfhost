@@ -72,3 +72,28 @@ Variáveis sensíveis (tokens, senhas) devem ser:
 - Módulos: `snake_case` (diretório e nome)
 - Outputs: `snake_case`
 
+## Divisão de Responsabilidades
+
+O projeto segue uma separação clara entre Terraform e scripts Python:
+
+### Terraform (prioridade)
+- Provisionar infraestrutura (LXC, Docker, containers)
+- Gerenciar recursos do Infisical (`infisical_identity`, `infisical_identity_universal_auth`, `infisical_identity_universal_auth_client_secret`, `infisical_project`, `infisical_secret`)
+- Configurar providers e módulos
+- Manter estado declarativo
+
+### Python (scripts/)
+- **Bootstrap inicial**: Apenas para operações que não têm resource no Terraform (ex: `/api/v1/admin/bootstrap` do Infisical)
+- **Orquestração**: `deploy.py` coordena fases e verifica dependências
+- **Utilitários**: Funções reutilizáveis em `utils.py`, `infisical_client.py`, `docker_client.py`
+
+### Shell Scripts (mínimo)
+- Apenas para provisioners do Terraform que executam via `pct exec` no Proxmox
+- Mantidos em `scripts/`: `download_template.sh`, `install_docker.sh`
+
+### Regra Geral
+Sempre que existir um resource/data source no Terraform provider, usar Terraform ao invés de scripts. Scripts Python são usados apenas para:
+1. Bootstrap inicial de serviços (operações únicas sem resource equivalente)
+2. Orquestração de fases do deploy
+3. Verificação de dependências do sistema
+
