@@ -13,8 +13,4 @@ output "container_ip" {
   value       = proxmox_lxc.docker.network[0].ip
 }
 
-output "portainer_url" {
-  description = "Portainer URL (if installed)"
-  value       = var.install_portainer ? "https://${proxmox_lxc.docker.network[0].ip}:9443" : null
-}
 

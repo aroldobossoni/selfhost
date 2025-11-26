@@ -1,18 +1,21 @@
 variable "pm_api_url" {
   description = "Proxmox API URL"
   type        = string
+  default     = "https://192.168.3.2:8006/api2/json"
 }
 
 variable "pm_api_token_id" {
   description = "Proxmox API Token ID"
   type        = string
   sensitive   = true
+  default     = "terraform-prov@pve!terraform-token"
 }
 
 variable "pm_api_token_secret" {
   description = "Proxmox API Token Secret"
   type        = string
   sensitive   = true
+  default     = "your-token-secret-here"
 }
 
 variable "pm_tls_insecure" {
@@ -24,6 +27,13 @@ variable "pm_tls_insecure" {
 variable "pm_node" {
   description = "Proxmox node name"
   type        = string
+  default     = "pve"
+}
+
+variable "pm_host" {
+  description = "Proxmox host IP or hostname for SSH connections"
+  type        = string
+  default     = "192.168.3.2"
 }
 
 provider "proxmox" {

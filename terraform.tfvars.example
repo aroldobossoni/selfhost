@@ -1,22 +1,24 @@
 # Proxmox API Configuration
 pm_api_url          = "https://192.168.3.2:8006/api2/json"
-pm_api_token_id     = "terraform-prov@pve!terraform-token"
-pm_api_token_secret = "your-token-secret-here"
+pm_api_token_id     = "root@pam!terraform"
+pm_api_token_secret = ""
 pm_tls_insecure     = true
-pm_node             = "pve"
+pm_node             = "proxmox"
+pm_host             = "192.168.3.2"
 
 # Docker LXC Container Configuration
 docker_hostname         = "docker-lxc"
-docker_ostemplate       = "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.gz"
+docker_ostemplate       = "local:vztmpl/alpine-3.22-default_20250617_amd64.tar.xz"
+docker_ostemplate_name  = "alpine-3.22-default_20250617_amd64.tar.xz"
+docker_template_storage = "local"
 docker_password         = "your-secure-password-here"
 docker_cores            = 2
 docker_memory           = 2048
 docker_swap             = 512
-docker_rootfs_storage   = "local-lvm"
+docker_rootfs_storage   = "local-zfs"
 docker_rootfs_size      = "16G"
 docker_network_bridge   = "vmbr0"
 docker_network_ip       = "dhcp"
-docker_install_portainer = true
-docker_install_compose   = true
-docker_start_on_boot     = true
+docker_install_compose  = true
+docker_start_on_boot    = true
 

@@ -7,13 +7,26 @@ variable "docker_hostname" {
 variable "docker_ostemplate" {
   description = "OS template for Docker container"
   type        = string
-  default     = "local:vztmpl/debian-12-standard_12.0-1_amd64.tar.gz"
+  default     = "local:vztmpl/alpine-3.22-default_20250617_amd64.tar.xz"
+}
+
+variable "docker_ostemplate_name" {
+  description = "Template name to download from Proxmox repository"
+  type        = string
+  default     = "alpine-3.22-default_20250617_amd64.tar.xz"
+}
+
+variable "docker_template_storage" {
+  description = "Storage where templates are stored"
+  type        = string
+  default     = "local"
 }
 
 variable "docker_password" {
-  description = "Root password for Docker container"
+  description = "Root password for Docker container (minimum 5 characters)"
   type        = string
   sensitive   = true
+  default     = "95429"
 }
 
 variable "docker_cores" {
@@ -37,7 +50,7 @@ variable "docker_swap" {
 variable "docker_rootfs_storage" {
   description = "Storage for Docker container rootfs"
   type        = string
-  default     = "local-lvm"
+  default     = "local-zfs"
 }
 
 variable "docker_rootfs_size" {
@@ -56,12 +69,6 @@ variable "docker_network_ip" {
   description = "IP address configuration for Docker container (DHCP or CIDR)"
   type        = string
   default     = "dhcp"
-}
-
-variable "docker_install_portainer" {
-  description = "Install Portainer (Docker UI)"
-  type        = bool
-  default     = true
 }
 
 variable "docker_install_compose" {

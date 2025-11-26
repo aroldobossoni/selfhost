@@ -1,9 +1,23 @@
+# Download template if not exists
+resource "null_resource" "download_template" {
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = "${path.root}/scripts/download_template.sh '${var.proxmox_host}' '${var.template_storage}' '${var.ostemplate_name}'"
+  }
+
+  triggers = {
+    template_name = var.ostemplate_name
+  }
+}
+
 resource "proxmox_lxc" "docker" {
+  depends_on = [null_resource.download_template]
+
   target_node  = var.target_node
   hostname     = var.hostname
   ostemplate   = var.ostemplate
   password     = var.password
-  unprivileged = false
+  unprivileged = true
   cores        = var.cores
   memory       = var.memory
   swap         = var.swap
@@ -26,19 +40,17 @@ resource "proxmox_lxc" "docker" {
   }
 }
 
-# Install Docker using helper script via pct exec on Proxmox host
+# Install Docker on Alpine via pct exec
 resource "null_resource" "docker_install" {
   depends_on = [proxmox_lxc.docker]
 
   provisioner "local-exec" {
-    command = <<-EOT
-      sleep 15
-      ssh -o StrictHostKeyChecking=no root@${var.target_node} "pct exec ${proxmox_lxc.docker.id} -- bash -c 'export DEBIAN_FRONTEND=noninteractive && echo -e \"y\\n${var.install_compose ? "y" : "n"}\\n${var.install_portainer ? "y" : "n"}\" | bash -c \"\$(wget -qLO - https://github.com/tteck/Proxmox/raw/main/ct/docker.sh)\"'"
-    EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = "${path.root}/scripts/install_docker.sh '${var.proxmox_host}' '${proxmox_lxc.docker.vmid}' '${var.install_compose}'"
   }
 
   triggers = {
-    container_id = proxmox_lxc.docker.id
+    container_id = proxmox_lxc.docker.vmid
   }
 }
 

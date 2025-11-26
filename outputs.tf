@@ -13,8 +13,4 @@ output "docker_container_ip" {
   value       = module.docker_lxc.container_ip
 }
 
-output "portainer_url" {
-  description = "Portainer URL (if installed)"
-  value       = module.docker_lxc.portainer_url
-}
 

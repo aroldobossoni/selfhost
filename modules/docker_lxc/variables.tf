@@ -3,14 +3,31 @@ variable "target_node" {
   type        = string
 }
 
+variable "proxmox_host" {
+  description = "Proxmox host IP or hostname for SSH connections"
+  type        = string
+}
+
 variable "hostname" {
   description = "Hostname of the LXC container"
   type        = string
 }
 
 variable "ostemplate" {
-  description = "OS template for the container (e.g., local:vztmpl/debian-12-standard_12.0-1_amd64.tar.gz)"
+  description = "OS template for the container (e.g., local:vztmpl/alpine-3.22-default_20250617_amd64.tar.xz)"
   type        = string
+}
+
+variable "ostemplate_name" {
+  description = "Template name to download from Proxmox repository (e.g., alpine-3.22-default_20250617_amd64.tar.xz)"
+  type        = string
+  default     = "alpine-3.22-default_20250617_amd64.tar.xz"
+}
+
+variable "template_storage" {
+  description = "Storage where templates are stored"
+  type        = string
+  default     = "local"
 }
 
 variable "password" {
@@ -46,7 +63,7 @@ variable "swap" {
 variable "rootfs_storage" {
   description = "Storage for rootfs"
   type        = string
-  default     = "local-lvm"
+  default     = "local-zfs"
 }
 
 variable "rootfs_size" {
@@ -65,12 +82,6 @@ variable "network_ip" {
   description = "IP address configuration (DHCP or CIDR notation)"
   type        = string
   default     = "dhcp"
-}
-
-variable "install_portainer" {
-  description = "Install Portainer (Docker UI)"
-  type        = bool
-  default     = true
 }
 
 variable "install_compose" {
