@@ -38,3 +38,7 @@ provider "proxmox" {
   pm_tls_insecure     = var.pm_tls_insecure
 }
 
+provider "docker" {
+  host = "ssh://root@${var.docker_host_ip}"
+}
+

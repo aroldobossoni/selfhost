@@ -82,3 +82,32 @@ variable "docker_start_on_boot" {
   default     = true
 }
 
+variable "docker_host_ip" {
+  description = "IP address of the Docker LXC container for SSH connection"
+  type        = string
+}
+
+variable "infisical_postgres_password" {
+  description = "PostgreSQL root password for Infisical"
+  type        = string
+  sensitive   = true
+}
+
+variable "infisical_db_password" {
+  description = "Infisical database encryption password"
+  type        = string
+  sensitive   = true
+}
+
+variable "infisical_encryption_key" {
+  description = "Infisical encryption key (32 bytes base64)"
+  type        = string
+  sensitive   = true
+}
+
+variable "infisical_jwt_signing_key" {
+  description = "Infisical JWT signing key"
+  type        = string
+  sensitive   = true
+}
+

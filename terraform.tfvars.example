@@ -22,3 +22,13 @@ docker_network_ip       = "dhcp"
 docker_install_compose  = true
 docker_start_on_boot    = true
 
+# Docker Host IP (get from terraform output docker_container_ip)
+docker_host_ip         = "192.168.3.115"
+
+# Infisical Configuration
+# Generate encryption key: openssl rand -base64 32
+infisical_postgres_password = "your-postgres-password-here"
+infisical_db_password       = "your-db-encryption-password-here"
+infisical_encryption_key     = "your-32-byte-base64-encryption-key"
+infisical_jwt_signing_key    = "your-jwt-signing-key-here"
+

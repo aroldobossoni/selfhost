@@ -19,3 +19,12 @@ module "docker_lxc" {
   start_on_boot     = var.docker_start_on_boot
 }
 
+module "infisical" {
+  source = "./modules/infisical"
+
+  postgres_password         = var.infisical_postgres_password
+  infisical_db_password     = var.infisical_db_password
+  infisical_encryption_key  = var.infisical_encryption_key
+  infisical_jwt_signing_key = var.infisical_jwt_signing_key
+}
+

@@ -36,12 +36,6 @@ variable "password" {
   sensitive   = true
 }
 
-variable "ssh_keys" {
-  description = "SSH public keys to add to the container (optional)"
-  type        = string
-  default     = ""
-}
-
 variable "cores" {
   description = "Number of CPU cores"
   type        = number
