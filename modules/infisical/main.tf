@@ -8,7 +8,8 @@ locals {
 
 # Docker network for Infisical stack
 resource "docker_network" "infisical" {
-  name = var.network_name
+  count = var.enabled ? 1 : 0
+  name  = var.network_name
 
   ipam_config {
     subnet = var.network_subnet
@@ -17,16 +18,19 @@ resource "docker_network" "infisical" {
 
 # PostgreSQL data volume
 resource "docker_volume" "postgres_data" {
-  name = var.postgres_data_volume
+  count = var.enabled ? 1 : 0
+  name  = var.postgres_data_volume
 }
 
 # Redis data volume
 resource "docker_volume" "redis_data" {
-  name = var.redis_data_volume
+  count = var.enabled ? 1 : 0
+  name  = var.redis_data_volume
 }
 
 # PostgreSQL container
 resource "docker_container" "postgres" {
+  count = var.enabled ? 1 : 0
   name  = local.postgres_container_name
   image = var.postgres_image
 
@@ -40,12 +44,12 @@ resource "docker_container" "postgres" {
   ]
 
   volumes {
-    volume_name    = docker_volume.postgres_data.name
+    volume_name    = docker_volume.postgres_data[0].name
     container_path = "/var/lib/postgresql/data"
   }
 
   networks_advanced {
-    name = docker_network.infisical.name
+    name = docker_network.infisical[0].name
   }
 
   restart = "unless-stopped"
@@ -61,6 +65,7 @@ resource "docker_container" "postgres" {
 
 # Redis container
 resource "docker_container" "redis" {
+  count = var.enabled ? 1 : 0
   name  = local.redis_container_name
   image = var.redis_image
 
@@ -74,12 +79,12 @@ resource "docker_container" "redis" {
   ]
 
   volumes {
-    volume_name    = docker_volume.redis_data.name
+    volume_name    = docker_volume.redis_data[0].name
     container_path = "/data"
   }
 
   networks_advanced {
-    name = docker_network.infisical.name
+    name = docker_network.infisical[0].name
   }
 
   restart = "unless-stopped"
@@ -87,6 +92,7 @@ resource "docker_container" "redis" {
 
 # Infisical container
 resource "docker_container" "infisical" {
+  count = var.enabled ? 1 : 0
   name  = local.infisical_container_name
   image = var.infisical_image
 
@@ -111,7 +117,7 @@ resource "docker_container" "infisical" {
   }
 
   networks_advanced {
-    name = docker_network.infisical.name
+    name = docker_network.infisical[0].name
   }
 
   depends_on = [

@@ -1,25 +1,35 @@
+variable "enabled" {
+  description = "Enable/disable all resources in this module"
+  type        = bool
+  default     = true
+}
+
 variable "postgres_password" {
   description = "PostgreSQL root password"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "infisical_db_password" {
   description = "Infisical database password"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "infisical_encryption_key" {
   description = "Infisical encryption key (32 bytes base64)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "infisical_jwt_signing_key" {
   description = "Infisical JWT signing key"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "postgres_memory_limit" {

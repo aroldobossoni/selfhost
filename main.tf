@@ -21,12 +21,12 @@ module "docker_lxc" {
 
 module "infisical" {
   source = "./modules/infisical"
-  count  = var.enable_infisical ? 1 : 0
 
   providers = {
     docker = docker.infisical
   }
 
+  enabled                   = var.enable_infisical
   postgres_password         = var.infisical_postgres_password
   infisical_db_password     = var.infisical_db_password
   infisical_encryption_key  = var.infisical_encryption_key
