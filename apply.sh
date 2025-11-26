@@ -44,6 +44,63 @@ check_required_tools() {
     log_info "All required tools available: terraform, tflint, shellcheck"
 }
 
+# Ensure SSH key exists for local machine
+ensure_ssh_key() {
+    log_step "Checking SSH key..."
+    
+    local key_file=""
+    
+    # Check for existing keys
+    if [ -f "$HOME/.ssh/id_ed25519" ]; then
+        key_file="$HOME/.ssh/id_ed25519"
+        log_info "SSH key exists: $key_file"
+    elif [ -f "$HOME/.ssh/id_rsa" ]; then
+        key_file="$HOME/.ssh/id_rsa"
+        log_info "SSH key exists: $key_file"
+    else
+        # Generate new key
+        log_info "No SSH key found. Generating ed25519 key..."
+        mkdir -p "$HOME/.ssh"
+        chmod 700 "$HOME/.ssh"
+        ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -N "" -C "$(whoami)@$(hostname)"
+        key_file="$HOME/.ssh/id_ed25519"
+        log_info "SSH key generated: $key_file"
+    fi
+    
+    # Export for use in other functions
+    export SSH_PUBLIC_KEY
+    SSH_PUBLIC_KEY=$(cat "${key_file}.pub")
+}
+
+# Copy SSH key to container via Proxmox
+copy_ssh_key_to_container() {
+    local proxmox_host="$1"
+    local container_id="$2"
+    
+    log_step "Copying SSH key to container $container_id..."
+    
+    # Check if key already exists in container
+    local existing_keys
+    existing_keys=$(ssh -o StrictHostKeyChecking=no "root@${proxmox_host}" \
+        "pct exec ${container_id} -- cat /root/.ssh/authorized_keys 2>/dev/null" || echo "")
+    
+    if echo "$existing_keys" | grep -q "$(echo "$SSH_PUBLIC_KEY" | awk '{print $2}')"; then
+        log_info "SSH key already exists in container."
+        return 0
+    fi
+    
+    # Add key to container
+    ssh -o StrictHostKeyChecking=no "root@${proxmox_host}" \
+        "pct exec ${container_id} -- sh -c '
+            mkdir -p /root/.ssh && \
+            chmod 700 /root/.ssh && \
+            echo \"${SSH_PUBLIC_KEY}\" >> /root/.ssh/authorized_keys && \
+            chmod 600 /root/.ssh/authorized_keys
+        '"
+    
+    log_info "SSH key copied to container."
+}
+
 # Run shellcheck on all shell scripts
 run_shellcheck() {
     log_step "Running shellcheck on scripts..."
@@ -135,6 +192,16 @@ get_docker_host_ip() {
     grep -E "^docker_host_ip\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*"\(.*\)"/\1/' | tr -d ' '
 }
 
+# Get pm_host from terraform.tfvars
+get_pm_host() {
+    grep -E "^pm_host\s*=" terraform.tfvars 2>/dev/null | sed 's/.*=\s*"\(.*\)"/\1/' | tr -d ' '
+}
+
+# Get container ID from terraform state
+get_container_id() {
+    terraform output -raw docker_container_id 2>/dev/null | sed 's|proxmox/lxc/||'
+}
+
 # Check if SSH is available on docker host
 check_ssh_available() {
     local host="$1"
@@ -179,16 +246,20 @@ main() {
     check_required_tools
     echo ""
 
-    # Step 2: Run linters
+    # Step 2: Ensure SSH key exists
+    ensure_ssh_key
+    echo ""
+
+    # Step 3: Run linters
     run_shellcheck
     run_tflint
     echo ""
 
-    # Step 3: Initialize terraform
+    # Step 4: Initialize terraform
     terraform_init
     echo ""
 
-    # Step 4: Get docker host IP
+    # Step 5: Get docker host IP
     log_step "Checking deployment state..."
     DOCKER_HOST_IP=$(get_docker_host_ip)
     
@@ -249,9 +320,20 @@ main() {
         terraform apply -target=module.docker_lxc -auto-approve
         
         echo ""
-        log_info "Phase 1 complete. Waiting for SSH to become available..."
+        log_info "Phase 1 complete. Configuring SSH access..."
+        
+        # Get Proxmox Host and Container ID
+        PM_HOST=$(get_pm_host)
+        CONTAINER_ID=$(get_container_id)
+        
+        if [ -n "$PM_HOST" ] && [ -n "$CONTAINER_ID" ]; then
+            copy_ssh_key_to_container "$PM_HOST" "$CONTAINER_ID"
+        else
+            log_warn "Could not auto-configure SSH (missing pm_host or container_id)"
+        fi
         
         # Wait for SSH with progress
+        log_info "Waiting for SSH to become available..."
         local max_attempts=30
         local attempt=0
         while [ $attempt -lt $max_attempts ]; do
