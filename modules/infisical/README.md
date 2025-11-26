@@ -36,19 +36,16 @@ No modules.
 | <a name="input_infisical_encryption_key"></a> [infisical\_encryption\_key](#input\_infisical\_encryption\_key) | Infisical encryption key (32 bytes base64) | `string` | `""` | no |
 | <a name="input_infisical_image"></a> [infisical\_image](#input\_infisical\_image) | Infisical Docker image | `string` | `"infisical/infisical:latest"` | no |
 | <a name="input_infisical_jwt_signing_key"></a> [infisical\_jwt\_signing\_key](#input\_infisical\_jwt\_signing\_key) | Infisical JWT signing key | `string` | `""` | no |
-| <a name="input_infisical_memory_limit"></a> [infisical\_memory\_limit](#input\_infisical\_memory\_limit) | Infisical container memory limit in MB | `number` | `512` | no |
 | <a name="input_infisical_port"></a> [infisical\_port](#input\_infisical\_port) | Infisical HTTP port | `number` | `8080` | no |
 | <a name="input_network_name"></a> [network\_name](#input\_network\_name) | Docker network name for Infisical stack (also used as container name prefix) | `string` | `"infisical"` | no |
 | <a name="input_network_subnet"></a> [network\_subnet](#input\_network\_subnet) | Docker network subnet CIDR | `string` | `"172.20.0.0/16"` | no |
 | <a name="input_postgres_data_volume"></a> [postgres\_data\_volume](#input\_postgres\_data\_volume) | PostgreSQL data volume name | `string` | `"infisical_postgres_data"` | no |
 | <a name="input_postgres_db"></a> [postgres\_db](#input\_postgres\_db) | PostgreSQL database name | `string` | `"infisical"` | no |
 | <a name="input_postgres_image"></a> [postgres\_image](#input\_postgres\_image) | PostgreSQL Docker image | `string` | `"postgres:15-alpine"` | no |
-| <a name="input_postgres_memory_limit"></a> [postgres\_memory\_limit](#input\_postgres\_memory\_limit) | PostgreSQL container memory limit in MB | `number` | `256` | no |
 | <a name="input_postgres_password"></a> [postgres\_password](#input\_postgres\_password) | PostgreSQL root password | `string` | `""` | no |
 | <a name="input_postgres_user"></a> [postgres\_user](#input\_postgres\_user) | PostgreSQL username | `string` | `"postgres"` | no |
 | <a name="input_redis_data_volume"></a> [redis\_data\_volume](#input\_redis\_data\_volume) | Redis data volume name | `string` | `"infisical_redis_data"` | no |
 | <a name="input_redis_image"></a> [redis\_image](#input\_redis\_image) | Redis Docker image | `string` | `"redis:7-alpine"` | no |
-| <a name="input_redis_memory_limit"></a> [redis\_memory\_limit](#input\_redis\_memory\_limit) | Redis container memory limit in MB | `number` | `64` | no |
 | <a name="input_server_url"></a> [server\_url](#input\_server\_url) | Infisical server URL (for CORS and redirects) | `string` | `""` | no |
 
 ## Outputs

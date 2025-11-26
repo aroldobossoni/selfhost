@@ -32,24 +32,6 @@ variable "infisical_jwt_signing_key" {
   default     = ""
 }
 
-variable "postgres_memory_limit" {
-  description = "PostgreSQL container memory limit in MB"
-  type        = number
-  default     = 256
-}
-
-variable "redis_memory_limit" {
-  description = "Redis container memory limit in MB"
-  type        = number
-  default     = 64
-}
-
-variable "infisical_memory_limit" {
-  description = "Infisical container memory limit in MB"
-  type        = number
-  default     = 512
-}
-
 variable "network_name" {
   description = "Docker network name for Infisical stack (also used as container name prefix)"
   type        = string
