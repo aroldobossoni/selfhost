@@ -29,56 +29,80 @@ from scripts.infisical_client import InfisicalClient
 from scripts.docker_client import cleanup_docker_resources, copy_ssh_key_to_container
 
 
-def check_dependencies() -> bool:
-    """Check and report on system dependencies."""
+def check_dependencies(auto_install: bool = True) -> bool:
+    """Check and install system dependencies."""
     log_step("Checking system dependencies...")
 
+    import subprocess
+    import tempfile
+
+    # APT packages that can be auto-installed
+    apt_packages = []
+
     deps = {
-        "terraform": "https://developer.hashicorp.com/terraform/install",
-        "tflint": "https://github.com/terraform-linters/tflint#installation",
-        "python3": "sudo apt install python3",
-        "ssh": "sudo apt install openssh-client",
-        "curl": "sudo apt install curl",
+        "terraform": ("terraform", "https://developer.hashicorp.com/terraform/install"),
+        "tflint": ("tflint", "https://github.com/terraform-linters/tflint#installation"),
+        "python3": ("python3", "python3"),
+        "ssh": ("openssh-client", "openssh-client"),
+        "curl": ("curl", "curl"),
     }
 
-    missing = []
-    for cmd, install_hint in deps.items():
+    missing_manual = []
+    for cmd, (pkg, install_hint) in deps.items():
         if shutil.which(cmd):
             log_info(f"✓ {cmd}")
         else:
-            log_error(f"✗ {cmd} - Install: {install_hint}")
-            missing.append(cmd)
+            if pkg in ["python3", "openssh-client", "curl"]:
+                apt_packages.append(pkg)
+                log_warn(f"✗ {cmd} (will install)")
+            else:
+                log_error(f"✗ {cmd} - Install: {install_hint}")
+                missing_manual.append(cmd)
 
-    # Check python3-venv by attempting to create a test venv
-    import subprocess
-    import tempfile
+    # Check python3-venv
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    venv_pkg = f"python{py_version}-venv"
+    venv_ok = False
+
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [sys.executable, "-m", "venv", f"{tmpdir}/test_venv"],
                 capture_output=True, text=True
             )
-            if result.returncode == 0:
-                log_info("✓ python3-venv")
-            else:
-                # Get Python version for specific package name
-                py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-                log_error(f"✗ python3-venv - Install: sudo apt install python{py_version}-venv")
-                missing.append("python3-venv")
+            venv_ok = result.returncode == 0
     except Exception:
-        log_error("✗ python3-venv - Install: sudo apt install python3-venv")
-        missing.append("python3-venv")
+        pass
+
+    if venv_ok:
+        log_info("✓ python3-venv")
+    else:
+        apt_packages.append(venv_pkg)
+        log_warn(f"✗ python3-venv (will install {venv_pkg})")
 
     # Check pip
     try:
         import pip  # noqa: F401
         log_info("✓ pip")
     except ImportError:
-        log_error("✗ pip - Install: sudo apt install python3-pip")
-        missing.append("pip")
+        apt_packages.append("python3-pip")
+        log_warn("✗ pip (will install)")
 
-    if missing:
-        log_error(f"\nMissing {len(missing)} dependencies. Install them and run again.")
+    # Install missing APT packages
+    if apt_packages and auto_install:
+        log_step(f"Installing: {' '.join(apt_packages)}")
+        result = subprocess.run(
+            ["sudo", "apt", "install", "-y"] + apt_packages,
+            capture_output=False
+        )
+        if result.returncode != 0:
+            log_error("Failed to install packages. Run manually:")
+            log_error(f"  sudo apt install -y {' '.join(apt_packages)}")
+            return False
+        log_info("Packages installed successfully!")
+
+    if missing_manual:
+        log_error(f"\n{len(missing_manual)} dependencies require manual installation.")
         return False
 
     log_info("\nAll dependencies satisfied!")
