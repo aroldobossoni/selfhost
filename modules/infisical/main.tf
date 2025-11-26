@@ -98,7 +98,7 @@ resource "docker_container" "infisical" {
   # Memory limits removed due to Docker-in-LXC cgroup issues
 
   env = [
-    "NODE_OPTIONS=--max-old-space-size=384",
+    "NODE_OPTIONS=--max-old-space-size=512",
     "DB_CONNECTION_URI=postgresql://${var.postgres_user}:${var.postgres_password}@${local.postgres_container_name}:5432/${var.postgres_db}",
     "DB_ENCRYPTION_KEY=${var.infisical_db_password}",
     "ENCRYPTION_KEY=${var.infisical_encryption_key}",
