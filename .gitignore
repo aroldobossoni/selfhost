@@ -1,20 +1,30 @@
 # Terraform
-*.tfstate
-*.tfstate.*
-*.tfvars
-!terraform.tfvars.example
 .terraform/
 .terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
 crash.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Sensitive files
+# Sensitive files - keep examples
+terraform.tfvars
+*.auto.tfvars
+!terraform.tfvars.example
 *.pem
 *.key
 secrets/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
 
 # OS
 .DS_Store
@@ -26,13 +36,3 @@ Thumbs.db
 *.swp
 *.swo
 *~
-
-
-# Terraform
-*.tfplan
-tfplan
-.terraform/
-*.tfstate
-*.tfstate.*
-terraform.tfvars
-*.auto.tfvars

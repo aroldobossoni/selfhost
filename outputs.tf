@@ -37,9 +37,11 @@ output "infisical_token_available" {
 output "infisical_client_id_set" {
   description = "Whether Infisical Client ID is set"
   value       = var.infisical_client_id != ""
+  sensitive   = true
 }
 
 output "infisical_client_secret_set" {
   description = "Whether Infisical Client Secret is set"
   value       = var.infisical_client_secret != ""
+  sensitive   = true
 }

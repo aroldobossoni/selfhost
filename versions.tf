@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.14.0"
+  required_version = ">= 1.10.0"
 
   required_providers {
     proxmox = {
@@ -8,27 +8,27 @@ terraform {
     }
     null = {
       source  = "hashicorp/null"
-      version = ">= 3.2.0"
+      version = ">= 3.2"
     }
     docker = {
       source  = "kreuzwerker/docker"
-      version = "~> 3.0"
+      version = ">= 3.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.6"
+      version = ">= 3.6"
     }
     http = {
       source  = "hashicorp/http"
-      version = "~> 3.4"
+      version = ">= 3.4"
     }
     local = {
       source  = "hashicorp/local"
-      version = "~> 2.5"
+      version = ">= 2.5"
     }
     infisical = {
       source  = "infisical/infisical"
-      version = "~> 0.11"
+      version = ">= 0.15"
     }
   }
 }

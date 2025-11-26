@@ -1,0 +1,4 @@
+# Python dependencies for selfhost automation scripts
+requests>=2.28.0
+pylint>=3.0.0
+
