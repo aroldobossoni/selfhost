@@ -5,11 +5,8 @@ terraform {
     docker = {
       source  = "kreuzwerker/docker"
       version = "~> 3.0"
+      configuration_aliases = [docker]
     }
   }
-}
-
-provider "docker" {
-  host = var.docker_host
 }
 

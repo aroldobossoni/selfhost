@@ -23,7 +23,10 @@ module "infisical" {
   source = "./modules/infisical"
   count  = var.enable_infisical ? 1 : 0
 
-  docker_host               = "ssh://root@${var.docker_host_ip}"
+  providers = {
+    docker = docker.infisical
+  }
+
   postgres_password         = var.infisical_postgres_password
   infisical_db_password     = var.infisical_db_password
   infisical_encryption_key  = var.infisical_encryption_key
