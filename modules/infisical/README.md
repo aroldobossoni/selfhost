@@ -31,7 +31,6 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_docker_host"></a> [docker\_host](#input\_docker\_host) | Docker host connection string (SSH format: ssh://user@host) | `string` | n/a | yes |
 | <a name="input_infisical_db_password"></a> [infisical\_db\_password](#input\_infisical\_db\_password) | Infisical database password | `string` | n/a | yes |
 | <a name="input_infisical_encryption_key"></a> [infisical\_encryption\_key](#input\_infisical\_encryption\_key) | Infisical encryption key (32 bytes base64) | `string` | n/a | yes |
 | <a name="input_infisical_jwt_signing_key"></a> [infisical\_jwt\_signing\_key](#input\_infisical\_jwt\_signing\_key) | Infisical JWT signing key | `string` | n/a | yes |
@@ -58,6 +57,8 @@ No modules.
 
 Module to deploy Infisical secrets management stack using Docker containers.
 
+**Note:** This module inherits the Docker provider from the root configuration. Configure the Docker provider in your root `providers.tf`.
+
 ## Memory Limits
 
 Optimized for minimal resource usage (~1GB total):
@@ -69,13 +70,18 @@ Optimized for minimal resource usage (~1GB total):
 ## Usage
 
 ```hcl
+# In providers.tf (root)
+provider "docker" {
+  host = "ssh://root@192.168.3.115"
+}
+
+# In main.tf (root)
 module "infisical" {
   source = "./modules/infisical"
 
-  docker_host            = "ssh://root@192.168.3.115"
-  postgres_password      = var.postgres_password
-  infisical_db_password  = var.db_password
-  infisical_encryption_key = var.encryption_key
+  postgres_password         = var.postgres_password
+  infisical_db_password     = var.db_password
+  infisical_encryption_key  = var.encryption_key
   infisical_jwt_signing_key = var.jwt_key
 }
 ```
@@ -85,4 +91,3 @@ module "infisical" {
 After deployment, access Infisical at:
 - **URL**: `http://<docker-host-ip>:8080`
 - **Default**: Create admin account on first access
-
