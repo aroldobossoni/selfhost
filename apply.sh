@@ -194,9 +194,10 @@ main() {
     
     if [ -z "$DOCKER_HOST_IP" ]; then
         log_warn "docker_host_ip not set in terraform.tfvars"
-        log_info "Applying docker_lxc module only (Phase 1)..."
+        log_info "Applying docker_lxc module only (Phase 1 with -target)..."
         set_enable_infisical "false"
-        terraform apply -auto-approve
+        # Use -target to avoid Docker provider initialization
+        terraform apply -target=module.docker_lxc -auto-approve
         
         echo ""
         log_info "Phase 1 complete!"
@@ -242,9 +243,10 @@ main() {
         fi
     else
         log_warn "SSH not available on $DOCKER_HOST_IP"
-        log_info "Applying docker_lxc module only (Phase 1)..."
+        log_info "Applying docker_lxc module only (Phase 1 with -target)..."
         set_enable_infisical "false"
-        terraform apply -auto-approve
+        # Use -target to avoid Docker provider initialization
+        terraform apply -target=module.docker_lxc -auto-approve
         
         echo ""
         log_info "Phase 1 complete. Waiting for SSH to become available..."

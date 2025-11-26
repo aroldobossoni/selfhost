@@ -38,8 +38,10 @@ provider "proxmox" {
   pm_tls_insecure     = var.pm_tls_insecure
 }
 
+# Docker provider for Infisical module
+# Only used when enable_infisical = true
 provider "docker" {
   alias = "infisical"
-  host  = var.enable_infisical ? "ssh://root@${var.docker_host_ip}" : null
+  host  = "ssh://root@${var.docker_host_ip}"
 }
 
