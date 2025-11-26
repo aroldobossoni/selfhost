@@ -41,9 +41,15 @@ variable "infisical_memory_limit" {
 }
 
 variable "network_name" {
-  description = "Docker network name for Infisical stack"
+  description = "Docker network name for Infisical stack (also used as container name prefix)"
   type        = string
   default     = "infisical"
+}
+
+variable "network_subnet" {
+  description = "Docker network subnet CIDR"
+  type        = string
+  default     = "172.20.0.0/16"
 }
 
 variable "postgres_data_volume" {
@@ -58,3 +64,44 @@ variable "redis_data_volume" {
   default     = "infisical_redis_data"
 }
 
+variable "postgres_image" {
+  description = "PostgreSQL Docker image"
+  type        = string
+  default     = "postgres:15-alpine"
+}
+
+variable "redis_image" {
+  description = "Redis Docker image"
+  type        = string
+  default     = "redis:7-alpine"
+}
+
+variable "infisical_image" {
+  description = "Infisical Docker image"
+  type        = string
+  default     = "infisical/infisical:latest"
+}
+
+variable "postgres_user" {
+  description = "PostgreSQL username"
+  type        = string
+  default     = "postgres"
+}
+
+variable "postgres_db" {
+  description = "PostgreSQL database name"
+  type        = string
+  default     = "infisical"
+}
+
+variable "infisical_port" {
+  description = "Infisical HTTP port"
+  type        = number
+  default     = 8080
+}
+
+variable "server_url" {
+  description = "Infisical server URL (for CORS and redirects)"
+  type        = string
+  default     = ""
+}

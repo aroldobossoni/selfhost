@@ -20,6 +20,11 @@ output "infisical_container_id" {
 
 output "infisical_url" {
   description = "Infisical web UI URL"
-  value       = "http://localhost:8080"
+  value       = local.server_url
+}
+
+output "infisical_port" {
+  description = "Infisical HTTP port"
+  value       = var.infisical_port
 }
 

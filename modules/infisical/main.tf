@@ -1,9 +1,17 @@
+# Local values for derived names
+locals {
+  postgres_container_name  = "${var.network_name}-postgres"
+  redis_container_name     = "${var.network_name}-redis"
+  infisical_container_name = var.network_name
+  server_url               = var.server_url != "" ? var.server_url : "http://localhost:${var.infisical_port}"
+}
+
 # Docker network for Infisical stack
 resource "docker_network" "infisical" {
   name = var.network_name
 
   ipam_config {
-    subnet = "172.20.0.0/16"
+    subnet = var.network_subnet
   }
 }
 
@@ -19,16 +27,16 @@ resource "docker_volume" "redis_data" {
 
 # PostgreSQL container
 resource "docker_container" "postgres" {
-  name  = "infisical-postgres"
-  image = "postgres:15-alpine"
+  name  = local.postgres_container_name
+  image = var.postgres_image
 
   memory      = var.postgres_memory_limit
   memory_swap = var.postgres_memory_limit
 
   env = [
-    "POSTGRES_USER=postgres",
+    "POSTGRES_USER=${var.postgres_user}",
     "POSTGRES_PASSWORD=${var.postgres_password}",
-    "POSTGRES_DB=infisical"
+    "POSTGRES_DB=${var.postgres_db}"
   ]
 
   volumes {
@@ -53,8 +61,8 @@ resource "docker_container" "postgres" {
 
 # Redis container
 resource "docker_container" "redis" {
-  name  = "infisical-redis"
-  image = "redis:7-alpine"
+  name  = local.redis_container_name
+  image = var.redis_image
 
   memory      = var.redis_memory_limit
   memory_swap = var.redis_memory_limit
@@ -79,27 +87,27 @@ resource "docker_container" "redis" {
 
 # Infisical container
 resource "docker_container" "infisical" {
-  name  = "infisical"
-  image = "infisical/infisical:latest"
+  name  = local.infisical_container_name
+  image = var.infisical_image
 
   memory      = var.infisical_memory_limit
   memory_swap = var.infisical_memory_limit
 
   env = [
     "NODE_OPTIONS=--max-old-space-size=384",
-    "DB_CONNECTION_URI=postgresql://postgres:${var.postgres_password}@infisical-postgres:5432/infisical",
+    "DB_CONNECTION_URI=postgresql://${var.postgres_user}:${var.postgres_password}@${local.postgres_container_name}:5432/${var.postgres_db}",
     "DB_ENCRYPTION_KEY=${var.infisical_db_password}",
     "ENCRYPTION_KEY=${var.infisical_encryption_key}",
     "JWT_SIGNUP_SECRET=${var.infisical_jwt_signing_key}",
     "JWT_REFRESH_SECRET=${var.infisical_jwt_signing_key}",
     "JWT_AUTH_SECRET=${var.infisical_jwt_signing_key}",
-    "REDIS_URL=redis://infisical-redis:6379",
-    "SERVER_URL=http://localhost:8080"
+    "REDIS_URL=redis://${local.redis_container_name}:6379",
+    "SERVER_URL=${local.server_url}"
   ]
 
   ports {
-    internal = 8080
-    external = 8080
+    internal = var.infisical_port
+    external = var.infisical_port
   }
 
   networks_advanced {
@@ -113,4 +121,3 @@ resource "docker_container" "infisical" {
 
   restart = "unless-stopped"
 }
-
