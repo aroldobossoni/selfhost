@@ -41,6 +41,9 @@ resource "infisical_identity_universal_auth_client_secret" "terraform_controller
 
   identity_id = infisical_identity.terraform_controller[0].id
   description = "Terraform Controller Client Secret"
+
+  # Must wait for Universal Auth to be attached first
+  depends_on = [infisical_identity_universal_auth.terraform_controller]
 }
 
 # Save credentials to file for subsequent runs
