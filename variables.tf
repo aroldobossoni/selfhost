@@ -26,7 +26,6 @@ variable "docker_password" {
   description = "Root password for Docker container (minimum 5 characters)"
   type        = string
   sensitive   = true
-  default     = "95429"
 }
 
 variable "docker_cores" {

@@ -17,7 +17,7 @@ resource "proxmox_lxc" "docker" {
   hostname     = var.hostname
   ostemplate   = var.ostemplate
   password     = var.password
-  unprivileged = true
+  unprivileged = false
   cores        = var.cores
   memory       = var.memory
   swap         = var.swap
