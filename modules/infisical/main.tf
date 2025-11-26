@@ -34,8 +34,8 @@ resource "docker_container" "postgres" {
   name  = local.postgres_container_name
   image = var.postgres_image
 
-  memory      = var.postgres_memory_limit
-  memory_swap = var.postgres_memory_limit
+  memory      = var.postgres_memory_limit * 1024 * 1024
+  memory_swap = var.postgres_memory_limit * 1024 * 1024
 
   env = [
     "POSTGRES_USER=${var.postgres_user}",
@@ -69,8 +69,8 @@ resource "docker_container" "redis" {
   name  = local.redis_container_name
   image = var.redis_image
 
-  memory      = var.redis_memory_limit
-  memory_swap = var.redis_memory_limit
+  memory      = var.redis_memory_limit * 1024 * 1024
+  memory_swap = var.redis_memory_limit * 1024 * 1024
 
   command = [
     "redis-server",
@@ -96,8 +96,8 @@ resource "docker_container" "infisical" {
   name  = local.infisical_container_name
   image = var.infisical_image
 
-  memory      = var.infisical_memory_limit
-  memory_swap = var.infisical_memory_limit
+  memory      = var.infisical_memory_limit * 1024 * 1024
+  memory_swap = var.infisical_memory_limit * 1024 * 1024
 
   env = [
     "NODE_OPTIONS=--max-old-space-size=384",
