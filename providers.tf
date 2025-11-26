@@ -39,6 +39,7 @@ provider "proxmox" {
 }
 
 provider "docker" {
-  host = "ssh://root@${var.docker_host_ip}"
+  # Only configure if enable_infisical is true, otherwise use dummy config
+  host = var.enable_infisical ? "ssh://root@${var.docker_host_ip}" : null
 }
 

@@ -15,12 +15,12 @@ output "docker_container_ip" {
 
 output "infisical_url" {
   description = "Infisical web UI URL"
-  value       = module.infisical.infisical_url
+  value       = var.enable_infisical ? module.infisical[0].infisical_url : null
 }
 
 output "infisical_container_id" {
   description = "Infisical container ID"
-  value       = module.infisical.infisical_container_id
+  value       = var.enable_infisical ? module.infisical[0].infisical_container_id : null
 }
 
 

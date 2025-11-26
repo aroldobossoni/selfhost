@@ -111,3 +111,9 @@ variable "infisical_jwt_signing_key" {
   sensitive   = true
 }
 
+variable "enable_infisical" {
+  description = "Enable Infisical module (set to true after docker_lxc is deployed with SSH)"
+  type        = bool
+  default     = false
+}
+

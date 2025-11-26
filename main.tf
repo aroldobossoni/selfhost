@@ -21,10 +21,13 @@ module "docker_lxc" {
 
 module "infisical" {
   source = "./modules/infisical"
+  count  = var.enable_infisical ? 1 : 0
 
   postgres_password         = var.infisical_postgres_password
   infisical_db_password     = var.infisical_db_password
   infisical_encryption_key  = var.infisical_encryption_key
   infisical_jwt_signing_key = var.infisical_jwt_signing_key
+
+  depends_on = [module.docker_lxc]
 }
 
