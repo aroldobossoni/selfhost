@@ -40,7 +40,7 @@ resource "proxmox_lxc" "docker" {
   }
 }
 
-# Install Docker on Alpine via pct exec
+# Install Docker and SSH on Alpine via pct exec
 resource "null_resource" "docker_install" {
   depends_on = [proxmox_lxc.docker]
 
@@ -50,7 +50,9 @@ resource "null_resource" "docker_install" {
   }
 
   triggers = {
-    container_id = proxmox_lxc.docker.vmid
+    container_id  = proxmox_lxc.docker.vmid
+    script_hash   = filemd5("${path.root}/scripts/install_docker.sh")
+    install_compose = var.install_compose
   }
 }
 
