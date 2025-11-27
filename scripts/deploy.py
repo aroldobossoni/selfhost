@@ -398,6 +398,17 @@ class Deployer:
         print("  Selfhost Intelligent Deploy")
         print("=" * 50 + "\n")
 
+        # Check Proxmox token permissions
+        token_id = read_tfvars("pm_api_token_id")
+        if token_id and not token_id.startswith("root@pam"):
+            log_warn(
+                "Proxmox token should be created for 'root@pam' with Administrator role "
+                "to create privileged containers with nesting=1 (required for Docker)."
+            )
+            log_warn(
+                "If you get permission errors, recreate the token for root@pam with Administrator role."
+            )
+
         # Check tools
         if not self.check_tools():
             return False
