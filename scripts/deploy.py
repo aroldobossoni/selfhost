@@ -285,6 +285,26 @@ class Deployer:
             if not self.terraform_apply(target="module.infisical"):
                 return False
 
+        # Wait for Infisical API to be ready
+        infisical_port = read_tfvars("infisical_port") or "8080"
+        infisical_url = f"http://{docker_host}:{infisical_port}"
+        log_info(f"Waiting for Infisical API at {infisical_url}...")
+        
+        import time
+        for i in range(60):
+            try:
+                import urllib.request
+                req = urllib.request.Request(f"{infisical_url}/api/status", method="GET")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    if resp.status == 200:
+                        log_info("Infisical API is ready!")
+                        break
+            except Exception:
+                pass
+            time.sleep(2)
+        else:
+            log_warn("Infisical API not ready after 2 minutes, continuing anyway...")
+
         log_info("Phase 2 complete!")
         return True
 
@@ -326,13 +346,35 @@ class Deployer:
         log_warn("Machine Identity creation may require another apply")
         return True
 
-    def phase4(self) -> bool:
+    def phase4(self, docker_host: str = None) -> bool:
         """Phase 4: Apply Infisical provider resources."""
         log_step("Phase 4: Applying Infisical resources...")
 
         if not self.has_credentials():
             log_warn("No credentials available, skipping Phase 4")
             return True
+
+        # Ensure Infisical is accessible before applying
+        if docker_host:
+            infisical_port = read_tfvars("infisical_port") or "8080"
+            infisical_url = f"http://{docker_host}:{infisical_port}"
+            
+            import time
+            log_info(f"Checking Infisical API at {infisical_url}...")
+            for i in range(30):
+                try:
+                    import urllib.request
+                    req = urllib.request.Request(f"{infisical_url}/api/status", method="GET")
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        if resp.status == 200:
+                            log_info("Infisical API is accessible!")
+                            break
+                except Exception:
+                    pass
+                time.sleep(2)
+            else:
+                log_error("Infisical API not accessible. Ensure containers are running.")
+                return False
 
         # Re-init to pick up any provider changes
         self.terraform_init(upgrade=True)
@@ -433,7 +475,7 @@ class Deployer:
                 return True
 
         # Phase 4: Apply Infisical resources
-        if not self.phase4():
+        if not self.phase4(docker_host):
             return False
 
         print("\n" + "=" * 50)
@@ -445,14 +487,54 @@ class Deployer:
         return True
 
     def destroy(self) -> bool:
-        """Destroy all infrastructure."""
+        """Destroy all infrastructure in correct order."""
         log_step("Destroying infrastructure...")
 
+        # 1. Remove Infisical provider resources from state (avoid auth errors)
+        log_info("Removing Infisical resources from state...")
+        infisical_resources = [
+            "infisical_secret",
+            "infisical_project_environment",
+            "infisical_project",
+            "infisical_identity_universal_auth_client_secret",
+            "infisical_identity_universal_auth",
+            "infisical_identity",
+            "local_file.infisical_credentials",
+            "null_resource.bootstrap_infisical",
+        ]
+        for resource in infisical_resources:
+            run_cmd(
+                ["terraform", "state", "rm", resource],
+                cwd=str(self.project_root),
+                check=False,
+            )
+
+        # 2. Cleanup Docker resources via SSH
         docker_host = read_tfvars("docker_host_ip")
         if docker_host and check_ssh(docker_host):
             cleanup_docker_resources(docker_host)
 
-        return self.terraform_destroy()
+        # 3. Remove module.infisical from state
+        log_info("Removing Infisical module from state...")
+        run_cmd(
+            ["terraform", "state", "rm", "module.infisical"],
+            cwd=str(self.project_root),
+            check=False,
+        )
+
+        # 4. Destroy remaining infrastructure (LXC)
+        log_info("Destroying remaining infrastructure...")
+        if not self.terraform_destroy():
+            log_warn("Terraform destroy had errors, continuing cleanup...")
+
+        # 5. Clean credential files
+        log_info("Cleaning credential files...")
+        for f in Path(self.project_root).glob("*.auto.tfvars"):
+            f.unlink()
+            log_info(f"Removed {f.name}")
+
+        log_info("Destroy complete!")
+        return True
 
 
 def main():

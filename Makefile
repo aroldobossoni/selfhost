@@ -75,5 +75,6 @@ clean:
 	rm -rf __pycache__ scripts/__pycache__
 	rm -f .terraform.lock.hcl
 	rm -f tfplan *.backup
+	rm -f *.auto.tfvars
 	@echo "==> Cleaned"
 
