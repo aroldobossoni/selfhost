@@ -413,42 +413,14 @@ class Deployer:
         if not self.terraform_init():
             return False
 
-        # Get docker host IP (from tfvars or Terraform output)
+        # Get docker host IP
         docker_host = read_tfvars("docker_host_ip")
-        
-        if not docker_host:
-            # Try to get IP from Terraform output
-            try:
-                docker_host = terraform_output("docker_container_ip")
-                # If output is "dhcp", get actual IP via SSH
-                if docker_host == "dhcp" or not docker_host:
-                    container_id = terraform_output("docker_container_id")
-                    if container_id:
-                        vmid = container_id.replace("proxmox/lxc/", "")
-                        pm_host = read_tfvars("pm_host")
-                        if pm_host:
-                            log_info("Getting container IP dynamically...")
-                            import subprocess
-                            result = subprocess.run(
-                                [
-                                    "ssh", "-o", "StrictHostKeyChecking=no",
-                                    f"root@{pm_host}",
-                                    f"pct exec {vmid} -- ip addr show eth0 | grep 'inet ' | awk '{{print $2}}' | cut -d/ -f1"
-                                ],
-                                capture_output=True,
-                                text=True,
-                                timeout=10
-                            )
-                            if result.returncode == 0:
-                                docker_host = result.stdout.strip()
-            except Exception as e:
-                log_warn(f"Could not get IP from Terraform output: {e}")
 
         if not docker_host:
-            log_warn("docker_host_ip not set and could not obtain from container")
+            log_warn("docker_host_ip not set")
             if not self.phase1():
                 return False
-            log_warn("Container created. Run 'terraform output docker_container_ip' to get IP, then update terraform.tfvars")
+            log_warn("Add docker_host_ip to terraform.tfvars and run again")
             return True
 
         log_info(f"Docker host: {docker_host}")

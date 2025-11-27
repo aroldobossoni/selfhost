@@ -83,9 +83,8 @@ variable "docker_start_on_boot" {
 }
 
 variable "docker_host_ip" {
-  description = "IP address of the Docker LXC container for SSH connection (optional, will be obtained dynamically if not set)"
+  description = "IP address of the Docker LXC container for SSH connection"
   type        = string
-  default     = ""
 }
 
 variable "infisical_admin_email" {

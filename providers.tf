@@ -42,7 +42,7 @@ provider "proxmox" {
 # Only used when enable_infisical = true
 provider "docker" {
   alias = "infisical"
-  host  = "ssh://root@${local.docker_host_ip}"
+  host  = "ssh://root@${var.docker_host_ip}"
 }
 
 # Infisical provider for managing secrets
