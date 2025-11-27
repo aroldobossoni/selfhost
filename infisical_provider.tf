@@ -1,18 +1,23 @@
 # Infisical provider for managing secrets
 # 
-# Authentication modes:
-# - Token auth: Used after bootstrap with admin token (for creating identity)
-# - Universal Auth: Used after identity is created (for normal operations)
+# Uses Universal Auth (client_id/client_secret) when available,
+# otherwise uses admin token for initial identity creation.
 #
-# The provider uses token auth by default. After infisical_token.auto.tfvars
-# is created with client_id/secret, switch to Universal Auth by updating this file.
+# After bootstrap creates infisical_token.auto.tfvars with credentials,
+# subsequent runs will use Universal Auth automatically.
+
 provider "infisical" {
   host = var.enable_infisical ? "http://${var.docker_host_ip}:${var.infisical_port}" : "http://localhost:8080"
 
-  # Token auth - used for initial identity creation
-  # After credentials are generated, this can be switched to universal auth
+  # Dynamic auth based on available credentials
+  # Universal Auth is used when client_id/secret are set (from infisical_token.auto.tfvars)
+  # Token Auth is used during bootstrap phase (from infisical_bootstrap.auto.tfvars)
   auth = {
-    token = coalesce(var.infisical_admin_token, var.infisical_token, "placeholder")
+    universal = var.infisical_client_id != "" ? {
+      client_id     = var.infisical_client_id
+      client_secret = var.infisical_client_secret
+    } : null
+
+    token = var.infisical_client_id == "" ? coalesce(var.infisical_admin_token, "not-yet-bootstrapped") : null
   }
 }
-
