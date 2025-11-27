@@ -43,7 +43,10 @@ def main():
     # URL format: http://host:port
     url_parts = url.replace("http://", "").replace("https://", "").split(":")
     host = url_parts[0]
-    port = int(url_parts[1]) if len(url_parts) > 1 else 8080
+    if len(url_parts) < 2:
+        log_error("Port must be specified in URL (e.g., http://host:8080)")
+        sys.exit(1)
+    port = int(url_parts[1])
 
     # Create client and bootstrap
     client = InfisicalClient(host, port)

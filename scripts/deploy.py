@@ -288,7 +288,10 @@ class Deployer:
                 return False
 
         # Wait for Infisical API to be ready
-        infisical_port = read_tfvars("infisical_port") or "8080"
+        infisical_port = read_tfvars("infisical_port")
+        if not infisical_port:
+            log_error("infisical_port not set in terraform.tfvars")
+            return False
         infisical_url = f"http://{docker_host}:{infisical_port}"
         log_info(f"Waiting for Infisical API at {infisical_url}...")
         
@@ -358,7 +361,10 @@ class Deployer:
 
         # Ensure Infisical is accessible before applying
         if docker_host:
-            infisical_port = read_tfvars("infisical_port") or "8080"
+            infisical_port = read_tfvars("infisical_port")
+            if not infisical_port:
+                log_error("infisical_port not set in terraform.tfvars")
+                return False
             infisical_url = f"http://{docker_host}:{infisical_port}"
             
             import time

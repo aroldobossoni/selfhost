@@ -27,6 +27,8 @@ module "infisical" {
   }
 
   enabled                   = var.enable_infisical
+  infisical_port            = var.infisical_port
+  server_url                = "http://${var.docker_host_ip}:${var.infisical_port}"
   postgres_password         = local.postgres_password
   infisical_db_password     = local.postgres_password
   infisical_encryption_key  = local.encryption_key_hex

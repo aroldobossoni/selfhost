@@ -143,7 +143,6 @@ variable "infisical_project_name" {
 variable "infisical_port" {
   description = "Infisical HTTP port"
   type        = number
-  default     = 8080
 }
 
 variable "enable_infisical" {

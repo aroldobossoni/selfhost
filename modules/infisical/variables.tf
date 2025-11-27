@@ -89,7 +89,6 @@ variable "postgres_db" {
 variable "infisical_port" {
   description = "Infisical HTTP port"
   type        = number
-  default     = 8080
 }
 
 variable "server_url" {

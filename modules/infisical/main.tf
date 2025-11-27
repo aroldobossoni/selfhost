@@ -3,7 +3,7 @@ locals {
   postgres_container_name  = "${var.network_name}-postgres"
   redis_container_name     = "${var.network_name}-redis"
   infisical_container_name = var.network_name
-  server_url               = var.server_url != "" ? var.server_url : "http://localhost:${var.infisical_port}"
+  server_url               = var.server_url
 }
 
 # Docker network for Infisical stack

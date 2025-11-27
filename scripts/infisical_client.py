@@ -11,7 +11,7 @@ from .utils import log_info, log_warn, log_error
 class InfisicalClient:
     """Client for interacting with Infisical API."""
 
-    def __init__(self, host: str, port: int = 8080):
+    def __init__(self, host: str, port: int):
         self.base_url = f"http://{host}:{port}"
         self.admin_token: Optional[str] = None
         self.org_id: Optional[str] = None
