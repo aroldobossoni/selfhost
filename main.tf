@@ -3,6 +3,7 @@ module "docker_lxc" {
 
   target_node       = var.pm_node
   proxmox_host      = var.pm_host
+  proxmox_ssh_user  = var.proxmox_ssh_user
   hostname          = var.docker_hostname
   ostemplate        = var.docker_ostemplate
   ostemplate_name   = var.docker_ostemplate_name

@@ -87,6 +87,16 @@ variable "docker_host_ip" {
   type        = string
 }
 
+variable "proxmox_ssh_user" {
+  description = "SSH user for Proxmox host"
+  type        = string
+}
+
+variable "docker_ssh_user" {
+  description = "SSH user for Docker LXC container"
+  type        = string
+}
+
 variable "infisical_admin_email" {
   description = "Email for Infisical admin user"
   type        = string

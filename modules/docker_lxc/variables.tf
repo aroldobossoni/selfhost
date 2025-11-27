@@ -8,6 +8,11 @@ variable "proxmox_host" {
   type        = string
 }
 
+variable "proxmox_ssh_user" {
+  description = "SSH user for Proxmox host"
+  type        = string
+}
+
 variable "hostname" {
   description = "Hostname of the LXC container"
   type        = string

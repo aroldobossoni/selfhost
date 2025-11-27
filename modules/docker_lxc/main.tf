@@ -2,7 +2,7 @@
 resource "null_resource" "download_template" {
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
-    command     = "${path.root}/scripts/download_template.sh '${var.proxmox_host}' '${var.template_storage}' '${var.ostemplate_name}'"
+    command     = "${path.root}/scripts/download_template.sh '${var.proxmox_ssh_user}' '${var.proxmox_host}' '${var.template_storage}' '${var.ostemplate_name}'"
   }
 
   triggers = {
@@ -46,7 +46,7 @@ resource "null_resource" "docker_install" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
-    command     = "${path.root}/scripts/install_docker.sh '${var.proxmox_host}' '${proxmox_lxc.docker.vmid}' '${var.install_compose}'"
+    command     = "${path.root}/scripts/install_docker.sh '${var.proxmox_ssh_user}' '${var.proxmox_host}' '${proxmox_lxc.docker.vmid}' '${var.install_compose}'"
   }
 
   triggers = {

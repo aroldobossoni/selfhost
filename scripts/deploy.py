@@ -271,19 +271,19 @@ class Deployer:
         log_info("Get container IP: terraform output docker_container_ip")
         return True
 
-    def phase2(self, docker_host: str) -> bool:
+    def phase2(self, docker_host: str, docker_ssh_user: str) -> bool:
         """Phase 2: Deploy Infisical containers."""
         log_step("Phase 2: Deploying Infisical containers...")
 
         # Clean up any orphaned Docker resources first
-        cleanup_docker_resources(docker_host)
+        cleanup_docker_resources(docker_host, docker_ssh_user)
 
         self.set_enable_infisical(True)
 
         # First apply with target
         if not self.terraform_apply(target="module.infisical", refresh=False):
             log_warn("Apply failed, retrying after cleanup...")
-            cleanup_docker_resources(docker_host)
+            cleanup_docker_resources(docker_host, docker_ssh_user)
             if not self.terraform_apply(target="module.infisical"):
                 return False
 
@@ -419,6 +419,17 @@ class Deployer:
         if not self.terraform_init():
             return False
 
+        # Get SSH users from config
+        docker_ssh_user = read_tfvars("docker_ssh_user")
+        proxmox_ssh_user = read_tfvars("proxmox_ssh_user")
+        
+        if not docker_ssh_user:
+            log_error("docker_ssh_user not set in terraform.tfvars")
+            return False
+        if not proxmox_ssh_user:
+            log_error("proxmox_ssh_user not set in terraform.tfvars")
+            return False
+
         # Get docker host IP
         docker_host = read_tfvars("docker_host_ip")
 
@@ -434,7 +445,7 @@ class Deployer:
         # Check SSH connectivity
         log_step(f"Checking SSH connectivity to {docker_host}...")
 
-        if not check_ssh(docker_host):
+        if not check_ssh(docker_host, docker_ssh_user):
             log_warn("SSH not available")
 
             # Try Phase 1
@@ -448,13 +459,13 @@ class Deployer:
                 container_id = container_id.replace("proxmox/lxc/", "")
 
             if proxmox_host and container_id:
-                copy_ssh_key_to_container(proxmox_host, container_id, public_key)
+                copy_ssh_key_to_container(proxmox_host, proxmox_ssh_user, container_id, public_key)
 
             # Wait for SSH
             log_info("Waiting for SSH to become available...")
             import time
             for i in range(30):
-                if check_ssh(docker_host):
+                if check_ssh(docker_host, docker_ssh_user):
                     log_info("SSH is now available!")
                     break
                 time.sleep(2)
@@ -465,15 +476,15 @@ class Deployer:
         log_info("SSH is available!")
 
         # Check Docker
-        if not check_docker(docker_host):
+        if not check_docker(docker_host, docker_ssh_user):
             log_error("Docker not responding via SSH")
-            log_info(f"Try: ssh root@{docker_host} 'service docker start'")
+            log_info(f"Try: ssh {docker_ssh_user}@{docker_host} 'service docker start'")
             return False
 
         log_info("Docker is available!")
 
         # Phase 2: Deploy Infisical containers
-        if not self.phase2(docker_host):
+        if not self.phase2(docker_host, docker_ssh_user):
             return False
 
         # Phase 3: Bootstrap
@@ -522,8 +533,9 @@ class Deployer:
 
         # 2. Cleanup Docker resources via SSH
         docker_host = read_tfvars("docker_host_ip")
-        if docker_host and check_ssh(docker_host):
-            cleanup_docker_resources(docker_host)
+        docker_ssh_user = read_tfvars("docker_ssh_user")
+        if docker_host and docker_ssh_user and check_ssh(docker_host, docker_ssh_user):
+            cleanup_docker_resources(docker_host, docker_ssh_user)
 
         # 3. Remove module.infisical from state
         log_info("Removing Infisical module from state...")
@@ -572,7 +584,10 @@ def main():
         "bootstrap": deployer.bootstrap,
         "destroy": deployer.destroy,
         "phase1": deployer.phase1,
-        "phase2": lambda: deployer.phase2(read_tfvars("docker_host_ip") or ""),
+        "phase2": lambda: deployer.phase2(
+            read_tfvars("docker_host_ip") or "",
+            read_tfvars("docker_ssh_user") or ""
+        ),
     }
 
     if command not in commands:

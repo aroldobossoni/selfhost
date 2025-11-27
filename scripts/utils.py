@@ -95,14 +95,14 @@ def write_tfvars(key: str, value: str, tfvars_file: str = "terraform.tfvars") ->
         f.write(content)
 
 
-def check_ssh(host: str, timeout: int = 5) -> bool:
+def check_ssh(host: str, user: str = "root", timeout: int = 5) -> bool:
     """Check if SSH is available on a host."""
     try:
         result = run_cmd(
             ["ssh", "-o", f"ConnectTimeout={timeout}",
              "-o", "StrictHostKeyChecking=no",
              "-o", "BatchMode=yes",
-             f"root@{host}", "exit"],
+             f"{user}@{host}", "exit"],
             capture=True,
             check=False
         )
@@ -111,13 +111,13 @@ def check_ssh(host: str, timeout: int = 5) -> bool:
         return False
 
 
-def check_docker(host: str) -> bool:
+def check_docker(host: str, user: str = "root") -> bool:
     """Check if Docker is available via SSH."""
     try:
         result = run_cmd(
             ["ssh", "-o", "ConnectTimeout=5",
              "-o", "StrictHostKeyChecking=no",
-             f"root@{host}", "docker", "version"],
+             f"{user}@{host}", "docker", "version"],
             capture=True,
             check=False
         )

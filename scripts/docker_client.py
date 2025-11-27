@@ -3,7 +3,7 @@
 from .utils import log_info, log_warn, log_step, run_cmd
 
 
-def cleanup_docker_resources(host: str, network_name: str = "infisical") -> bool:
+def cleanup_docker_resources(host: str, user: str, network_name: str = "infisical") -> bool:
     """Clean up Docker containers and networks via SSH."""
     log_step("Cleaning up Docker resources...")
 
@@ -32,7 +32,7 @@ def cleanup_docker_resources(host: str, network_name: str = "infisical") -> bool
 
     try:
         result = run_cmd(
-            ["ssh", "-o", "StrictHostKeyChecking=no", f"root@{host}", cleanup_script],
+            ["ssh", "-o", "StrictHostKeyChecking=no", f"{user}@{host}", cleanup_script],
             capture=True,
             check=False
         )
@@ -51,6 +51,7 @@ def cleanup_docker_resources(host: str, network_name: str = "infisical") -> bool
 
 def copy_ssh_key_to_container(
     proxmox_host: str,
+    proxmox_user: str,
     container_id: str,
     public_key: str
 ) -> bool:
@@ -61,7 +62,7 @@ def copy_ssh_key_to_container(
     check_cmd = f"pct exec {container_id} -- cat /root/.ssh/authorized_keys 2>/dev/null"
     try:
         result = run_cmd(
-            ["ssh", "-o", "StrictHostKeyChecking=no", f"root@{proxmox_host}", check_cmd],
+            ["ssh", "-o", "StrictHostKeyChecking=no", f"{proxmox_user}@{proxmox_host}", check_cmd],
             capture=True,
             check=False
         )
@@ -85,7 +86,7 @@ def copy_ssh_key_to_container(
 
     try:
         run_cmd(
-            ["ssh", "-o", "StrictHostKeyChecking=no", f"root@{proxmox_host}", add_cmd],
+            ["ssh", "-o", "StrictHostKeyChecking=no", f"{proxmox_user}@{proxmox_host}", add_cmd],
             capture=True,
             check=True
         )
