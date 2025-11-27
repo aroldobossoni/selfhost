@@ -22,8 +22,8 @@ docker_network_ip       = "dhcp"
 docker_install_compose  = true
 docker_start_on_boot    = true
 
-# Docker Host IP (get from terraform output docker_container_ip)
-docker_host_ip = "192.168.3.115"
+# Docker Host IP (optional - will be obtained dynamically from container if not set)
+# docker_host_ip = ""
 
 # Infisical Configuration
 # Passwords are automatically generated - no need to set them manually

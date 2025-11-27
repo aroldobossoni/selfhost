@@ -9,8 +9,13 @@ output "container_hostname" {
 }
 
 output "container_ip" {
-  description = "IP address of the container"
+  description = "IP address of the container (from network config, may be 'dhcp')"
   value       = proxmox_lxc.docker.network[0].ip
+}
+
+output "vmid" {
+  description = "VMID of the container"
+  value       = proxmox_lxc.docker.vmid
 }
 
 
