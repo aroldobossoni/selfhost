@@ -65,17 +65,13 @@ Priorizando o uso de containers LXC para economizar recursos.
 
 ## Criação do Token API no Proxmox
 
-**IMPORTANTE**: O token precisa ter permissões administrativas completas para criar containers privilegiados com `nesting=1` (necessário para Docker).
-
 1. Acesse a interface web do Proxmox VE
 2. Navegue até **Datacenter** > **Permissions** > **API Tokens**
-3. Clique em **Add** e crie um token para `root@pam`
-4. Configure as permissões:
-   - **Role**: `Administrator` (ou permissões completas no Datacenter)
-   - **Privilege Separation**: Desabilitado (para permitir criação de containers privilegiados)
-5. Copie o `Token ID` (formato: `root@pam!terraform`) e `Secret` para o arquivo `terraform.tfvars`
+3. Clique em **Add** e crie um token para o usuário desejado
+4. Configure as permissões necessárias (geralmente Administrator role)
+5. Copie o `Token ID` e `Secret` para o arquivo `terraform.tfvars`
 
-**Nota**: Se você receber o erro "Permission check failed (changing feature flags for privileged container is only allowed for root@pam)", significa que o token não tem permissões suficientes. Use um token criado para `root@pam` com role `Administrator`.
+**Nota**: O projeto usa containers LXC não-privilegiados com `nesting=1` habilitado, que podem ser criados com tokens de API normais (não requerem permissões especiais de root@pam).
 
 ## Módulos
 
