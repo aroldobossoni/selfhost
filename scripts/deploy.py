@@ -191,11 +191,13 @@ class Deployer:
             log_error(f"Terraform apply failed: {e}")
             return False
 
-    def terraform_destroy(self, auto_approve: bool = True) -> bool:
+    def terraform_destroy(self, auto_approve: bool = True, refresh: bool = True) -> bool:
         """Run terraform destroy."""
         cmd = ["terraform", "destroy"]
         if auto_approve:
             cmd.append("-auto-approve")
+        if not refresh:
+            cmd.append("-refresh=false")
 
         try:
             run_cmd(cmd, cwd=str(self.project_root), check=True)
@@ -493,14 +495,17 @@ class Deployer:
         # 1. Remove Infisical provider resources from state (avoid auth errors)
         log_info("Removing Infisical resources from state...")
         infisical_resources = [
-            "infisical_secret",
-            "infisical_project_environment",
-            "infisical_project",
-            "infisical_identity_universal_auth_client_secret",
-            "infisical_identity_universal_auth",
-            "infisical_identity",
-            "local_file.infisical_credentials",
-            "null_resource.bootstrap_infisical",
+            "infisical_secret.postgres_password[0]",
+            "infisical_secret.encryption_key[0]",
+            "infisical_secret.jwt_signing_key[0]",
+            "infisical_secret.admin_password[0]",
+            "infisical_project_environment.development[0]",
+            "infisical_project.selfhost[0]",
+            "infisical_identity_universal_auth_client_secret.terraform_controller[0]",
+            "infisical_identity_universal_auth.terraform_controller[0]",
+            "infisical_identity.terraform_controller[0]",
+            "local_file.infisical_credentials[0]",
+            "null_resource.bootstrap_infisical[0]",
         ]
         for resource in infisical_resources:
             run_cmd(
@@ -523,8 +528,9 @@ class Deployer:
         )
 
         # 4. Destroy remaining infrastructure (LXC)
+        # Use -refresh=false to avoid trying to refresh Infisical resources
         log_info("Destroying remaining infrastructure...")
-        if not self.terraform_destroy():
+        if not self.terraform_destroy(refresh=False):
             log_warn("Terraform destroy had errors, continuing cleanup...")
 
         # 5. Clean credential files
