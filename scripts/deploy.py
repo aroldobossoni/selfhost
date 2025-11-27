@@ -426,10 +426,6 @@ class Deployer:
         if not self.phase2(docker_host):
             return False
 
-        # Sync all resources
-        log_info("Syncing all resources...")
-        self.terraform_apply()
-
         # Phase 3: Bootstrap
         if not self.has_credentials():
             if not self.bootstrap():
