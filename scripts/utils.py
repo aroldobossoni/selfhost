@@ -147,14 +147,13 @@ def ensure_ssh_key() -> Tuple[str, str]:
     ssh_dir = Path.home() / ".ssh"
     ssh_dir.mkdir(mode=0o700, exist_ok=True)
 
-    # Check for existing keys
-    for key_type in ["id_ed25519", "id_rsa"]:
-        key_path = ssh_dir / key_type
-        pub_path = ssh_dir / f"{key_type}.pub"
-        if key_path.exists() and pub_path.exists():
-            log_info(f"SSH key exists: {key_path}")
-            with open(pub_path, 'r', encoding='utf-8') as f:
-                return str(key_path), f.read().strip()
+    # Check for existing ed25519 key
+    key_path = ssh_dir / "id_ed25519"
+    pub_path = ssh_dir / "id_ed25519.pub"
+    if key_path.exists() and pub_path.exists():
+        log_info(f"SSH key exists: {key_path}")
+        with open(pub_path, 'r', encoding='utf-8') as f:
+            return str(key_path), f.read().strip()
 
     # Generate new key
     key_path = ssh_dir / "id_ed25519"

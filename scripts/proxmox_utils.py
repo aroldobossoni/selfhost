@@ -122,8 +122,8 @@ def install_docker(
         check=False
     )
     
-    # Copy Proxmox host public key to container
-    copy_key_cmd = f"cat /root/.ssh/id_rsa.pub | pct exec {container_id} -- sh -c 'cat >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys'"
+    # Copy Proxmox host public key to container (ed25519 only)
+    copy_key_cmd = f"cat /root/.ssh/id_ed25519.pub | pct exec {container_id} -- sh -c 'cat >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys'"
     run_cmd(
         [
             "ssh", "-o", "StrictHostKeyChecking=no",
@@ -134,8 +134,8 @@ def install_docker(
         check=False
     )
     
-    # Copy local machine's public key if available
-    local_key_path = Path.home() / ".ssh" / "id_rsa.pub"
+    # Copy local machine's public key if available (ed25519 only)
+    local_key_path = Path.home() / ".ssh" / "id_ed25519.pub"
     if local_key_path.exists():
         local_key = local_key_path.read_text().strip()
         add_key_cmd = f"pct exec {container_id} -- sh -c 'echo \"{local_key}\" >> /root/.ssh/authorized_keys'"

@@ -60,3 +60,8 @@ output "infisical_client_secret" {
   value       = module.infisical.client_secret
   sensitive   = true
 }
+
+output "infisical_project_id" {
+  description = "Infisical project ID"
+  value       = module.infisical.project_id
+}
