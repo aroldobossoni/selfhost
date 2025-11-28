@@ -197,8 +197,15 @@ def cleanup_docker_resources(host: str, user: str, network_name: str = "infisica
             fi
         done
 
-        # Force remove network if it exists
-        docker network rm {network_name} 2>/dev/null || true
+        # Force remove network (try multiple times, handle stale endpoints)
+        for i in 1 2 3; do
+            docker network rm {network_name} 2>/dev/null && break
+            # If failed, try to remove stale endpoints
+            docker network inspect {network_name} 2>/dev/null | grep -o '"EndpointID": "[^"]*"' | cut -d'"' -f4 | while read ep; do
+                docker network disconnect -f {network_name} "$ep" 2>/dev/null || true
+            done
+            sleep 1
+        done
 
         # Remove volumes (important: this deletes all data!)
         for volume in {network_name}_postgres_data {network_name}_redis_data; do
