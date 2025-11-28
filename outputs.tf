@@ -9,8 +9,8 @@ output "docker_container_hostname" {
 }
 
 output "docker_container_ip" {
-  description = "IP address of the Docker container"
-  value       = module.docker_lxc.container_ip
+  description = "IP address of the Docker container (from Proxmox API)"
+  value       = local.docker_host_ip
 }
 
 output "infisical_url" {

@@ -83,8 +83,9 @@ variable "docker_start_on_boot" {
 }
 
 variable "docker_host_ip" {
-  description = "IP address of the Docker LXC container for SSH connection"
+  description = "IP address of the Docker LXC container (optional, obtained from Proxmox API when using DHCP)"
   type        = string
+  default     = ""
 }
 
 variable "proxmox_ssh_user" {

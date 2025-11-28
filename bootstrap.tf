@@ -9,7 +9,7 @@ resource "null_resource" "bootstrap_infisical" {
   count = var.enable_infisical ? 1 : 0
 
   triggers = {
-    docker_host_ip = var.docker_host_ip
+    docker_host_ip = local.docker_host_ip
     infisical_port = var.infisical_port
   }
 
@@ -21,7 +21,7 @@ resource "null_resource" "bootstrap_infisical" {
       fi
       
       $PYTHON_CMD ${path.module}/scripts/bootstrap_infisical.py \
-        "http://${var.docker_host_ip}:${var.infisical_port}" \
+        "http://${local.docker_host_ip}:${var.infisical_port}" \
         "${var.infisical_admin_email}" \
         "${local.infisical_admin_password}" \
         "${var.infisical_org_name}"

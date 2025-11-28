@@ -7,7 +7,7 @@
 # subsequent runs will use Universal Auth automatically.
 
 provider "infisical" {
-  host = "http://${var.docker_host_ip}:${var.infisical_port}"
+  host = "http://${local.docker_host_ip}:${var.infisical_port}"
 
   # Dynamic auth based on available credentials
   # Universal Auth is used when client_id/secret are set (from infisical_token.auto.tfvars)

@@ -420,15 +420,18 @@ class Deployer:
             log_error("proxmox_ssh_user not set in terraform.tfvars")
             return False
 
-        # Get docker host IP
-        docker_host = read_tfvars("docker_host_ip")
+        # Get docker host IP from Terraform output (obtained from Proxmox API)
+        docker_host = terraform_output("docker_container_ip")
 
         if not docker_host:
-            log_warn("docker_host_ip not set")
+            log_info("Container IP not available, deploying LXC first...")
             if not self.phase1():
                 return False
-            log_warn("Add docker_host_ip to terraform.tfvars and run again")
-            return True
+            # Get IP after phase1
+            docker_host = terraform_output("docker_container_ip")
+            if not docker_host:
+                log_error("Could not obtain container IP from Proxmox API")
+                return False
 
         log_info(f"Docker host: {docker_host}")
 

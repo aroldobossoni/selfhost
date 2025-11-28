@@ -26,8 +26,8 @@ docker_network_ip       = "dhcp"
 docker_install_compose  = true
 docker_start_on_boot    = true
 
-# Docker Host IP (required after container is created)
-docker_host_ip = ""
+# Docker Host IP (optional - automatically obtained from Proxmox API when using DHCP)
+# docker_host_ip = ""
 
 # Infisical Configuration
 # Passwords are automatically generated - no need to set them manually
