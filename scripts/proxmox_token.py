@@ -23,7 +23,10 @@ def list_tokens(proxmox_host: str, ssh_user: str, pve_user: str) -> list:
     """List all tokens for a Proxmox user."""
     try:
         cmd = [
-            "ssh", "-o", "StrictHostKeyChecking=no",
+            "ssh",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=10",
             f"{ssh_user}@{proxmox_host}",
             f"pveum user token list {pve_user} --output-format json"
         ]
@@ -56,7 +59,10 @@ def remove_token(proxmox_host: str, ssh_user: str, token_id: str) -> bool:
         token_name = parts[1]
         
         cmd = [
-            "ssh", "-o", "StrictHostKeyChecking=no",
+            "ssh",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=10",
             f"{ssh_user}@{proxmox_host}",
             f"pveum user token delete {pve_user} {token_name}"
         ]
@@ -96,7 +102,10 @@ def create_token(
     log_info(f"Creating Proxmox token: {pve_user}!{token_name}")
     try:
         cmd = [
-            "ssh", "-o", "StrictHostKeyChecking=no",
+            "ssh",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=10",
             f"{ssh_user}@{proxmox_host}",
             f"pveum user token add {pve_user} {token_name} --privsep 0 --output-format json"
         ]
