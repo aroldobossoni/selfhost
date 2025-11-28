@@ -420,51 +420,44 @@ class Deployer:
             log_error("proxmox_ssh_user not set in terraform.tfvars")
             return False
 
+        # Phase 1: Deploy LXC (always run to ensure container exists and get IP)
+        if not self.phase1():
+            return False
+
         # Get docker host IP from Terraform output (obtained from Proxmox API)
         docker_host = terraform_output("docker_container_ip")
 
-        if not docker_host:
-            log_info("Container IP not available, deploying LXC first...")
-            if not self.phase1():
-                return False
-            # Get IP after phase1
-            docker_host = terraform_output("docker_container_ip")
-            if not docker_host:
-                log_error("Could not obtain container IP from Proxmox API")
-                return False
+        if not docker_host or docker_host == "dhcp":
+            log_error("Could not obtain container IP from Proxmox API")
+            log_info("Check if container is running: ssh root@proxmox 'pct status <vmid>'")
+            return False
 
         log_info(f"Docker host: {docker_host}")
 
-        # Check SSH connectivity
+        # Check SSH connectivity (quick check, no long wait)
         log_step(f"Checking SSH connectivity to {docker_host}...")
 
         if not check_ssh(docker_host, docker_ssh_user):
-            log_warn("SSH not available")
-
-            # Try Phase 1
-            if not self.phase1():
-                return False
-
-            # Try to copy SSH key via Proxmox
+            # Copy SSH key via Proxmox if needed
             proxmox_host = read_tfvars("pm_host")
             container_id = terraform_output("docker_container_id")
             if container_id:
                 container_id = container_id.replace("proxmox/lxc/", "")
 
             if proxmox_host and container_id:
+                log_info("Copying SSH key to container...")
                 copy_ssh_key_to_container(proxmox_host, proxmox_ssh_user, container_id, public_key)
 
-            # Wait for SSH
-            log_info("Waiting for SSH to become available...")
+            # Brief wait for SSH (max 10 seconds)
             import time
-            for i in range(30):
+            for i in range(5):
                 if check_ssh(docker_host, docker_ssh_user):
-                    log_info("SSH is now available!")
                     break
                 time.sleep(2)
             else:
-                log_warn("SSH still not available. Run again when ready.")
-                return True
+                log_error(f"SSH not available at {docker_host}")
+                log_info(f"Try manually: ssh {docker_ssh_user}@{docker_host}")
+                return False
 
         log_info("SSH is available!")
 
