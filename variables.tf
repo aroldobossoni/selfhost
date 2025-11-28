@@ -157,18 +157,6 @@ variable "infisical_port" {
   default     = 8080
 }
 
-variable "infisical_admin_email" {
-  description = "Email for Infisical admin user"
-  type        = string
-  default     = "admin@example.com"
-}
-
-variable "infisical_org_name" {
-  description = "Infisical organization name"
-  type        = string
-  default     = "Selfhost"
-}
-
 variable "infisical_project_name" {
   description = "Infisical project name"
   type        = string

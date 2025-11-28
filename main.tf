@@ -30,17 +30,11 @@ module "infisical" {
 
   enabled      = var.enable_infisical
   server_url   = "http://${local.docker_host_ip}:${var.infisical_port}"
-  admin_email  = var.infisical_admin_email
-  org_name     = var.infisical_org_name
   project_name = var.infisical_project_name
 
   # Bootstrap outputs (from .auto.tfvars)
   admin_token = var.infisical_admin_token
   org_id      = var.infisical_org_id
-
-  # Machine Identity credentials (from .auto.tfvars)
-  client_id     = var.infisical_client_id
-  client_secret = var.infisical_client_secret
 
   # Proxmox token management
   proxmox_host      = var.pm_host

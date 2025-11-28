@@ -59,15 +59,30 @@ def check_existing_bootstrap(base_url: str, email: str, password: str) -> dict |
                 )
                 if org_resp.status_code == 200:
                     org_data = org_resp.json()
-                    org_id = org_data.get("organization", {}).get("_id") or org_data.get("organization", {}).get("id")
+                    orgs = org_data.get("organizations", [])
+                    if orgs:
+                        org_id = orgs[0].get("id") or orgs[0].get("_id")
+                        if org_id:
+                            log_info("Found existing bootstrap, using existing credentials")
+                            return {
+                                "token": token,
+                                "org_id": org_id
+                            }
+                    # Try alternative response format
+                    org = org_data.get("organization", {})
+                    org_id = org.get("id") or org.get("_id")
                     if org_id:
                         log_info("Found existing bootstrap, using existing credentials")
                         return {
                             "token": token,
                             "org_id": org_id
                         }
-    except RequestException:
-        pass
+                else:
+                    log_error(f"Failed to get organization: {org_resp.status_code} - {org_resp.text}")
+        else:
+            log_info(f"Login failed: {resp.status_code} - not yet bootstrapped or wrong credentials")
+    except RequestException as e:
+        log_error(f"Check existing bootstrap failed: {e}")
     
     return None
 
@@ -90,10 +105,26 @@ def bootstrap(base_url: str, email: str, password: str, org_name: str) -> dict |
         if resp.status_code == 200:
             data = resp.json()
             log_info("Bootstrap successful!")
-            return {
-                "token": data["identity"]["credentials"]["token"],
-                "org_id": data["organization"]["id"]
-            }
+            # Handle different response formats
+            token = None
+            org_id = None
+            
+            # Try identity.credentials.token format
+            if "identity" in data and "credentials" in data["identity"]:
+                token = data["identity"]["credentials"].get("token")
+            # Try direct token format
+            if not token:
+                token = data.get("token") or data.get("accessToken")
+            
+            # Try organization.id format
+            if "organization" in data:
+                org_id = data["organization"].get("id") or data["organization"].get("_id")
+            
+            if token and org_id:
+                return {"token": token, "org_id": org_id}
+            else:
+                log_error(f"Bootstrap response missing token or org_id: {data}")
+                return None
 
         if resp.status_code == 400 and "already" in resp.text.lower():
             log_info("Instance already bootstrapped, checking for existing credentials...")
@@ -120,7 +151,10 @@ def main():
     check_existing = "--check-existing" in sys.argv
 
     # Parse host and port from URL
-    url_parts = url.replace("http://", "").replace("https://", "").split(":")
+    url_clean = url.replace("http://", "").replace("https://", "")
+    # Remove path if present (e.g., "host:port/path" -> "host:port")
+    url_clean = url_clean.split("/")[0]
+    url_parts = url_clean.split(":")
     host = url_parts[0]
     port = int(url_parts[1]) if len(url_parts) > 1 else 8080
     

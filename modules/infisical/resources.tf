@@ -6,9 +6,6 @@ locals {
   # Bootstrap complete = we have admin token and org_id (can create project)
   # This is also defined in identity.tf, but we need it here too
   can_create_project = var.enabled && var.admin_token != "" && var.org_id != ""
-  
-  # Infisical ready = we have Machine Identity credentials (can store secrets)
-  infisical_ready = var.enabled && var.client_id != "" && var.client_secret != ""
 }
 
 # Create main project (needs bootstrap, not Machine Identity)
