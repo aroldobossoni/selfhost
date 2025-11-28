@@ -127,13 +127,15 @@ def create_token(
             "token_secret": token_secret
         }
     except subprocess.CalledProcessError as e:
-        # If token already exists and we're not rotating, that's an error
+        # If token already exists, try to rotate it
         if "already exists" in (e.stderr or "").lower() or "already exists" in (e.stdout or "").lower():
             if not rotate:
-                log_error(f"Token {pve_user}!{token_name} already exists. Use --rotate to replace it.")
+                log_warn(f"Token {pve_user}!{token_name} already exists, rotating to get new secret...")
+                # Recursively call with rotate=True
+                return create_token(proxmox_host, ssh_user, pve_user, token_name, rotate=True)
             else:
                 log_error(f"Failed to rotate token (may have been removed but creation failed)")
-            sys.exit(1)
+                sys.exit(1)
         log_error(f"Failed to create token: {e}")
         if e.stdout:
             log_error(f"Output: {e.stdout}")
