@@ -280,13 +280,21 @@ class Deployer:
         """Phase 2: Deploy Infisical containers."""
         log_step("Phase 2: Deploying Infisical containers...")
 
-        # Clean up any orphaned Docker resources first
-        cleanup_docker_resources(docker_host, docker_ssh_user)
-
-        # First apply with target
-        if not self.terraform_apply(target="module.infisical", refresh=False):
-            log_warn("Apply failed, retrying after cleanup...")
+        # Apply Infisical module (refresh=True to detect state drift)
+        if not self.terraform_apply(target="module.infisical"):
+            # If failed, cleanup orphaned Docker resources and retry
+            log_warn("Apply failed, cleaning up and retrying...")
             cleanup_docker_resources(docker_host, docker_ssh_user)
+            # Remove Docker resources from state so Terraform recreates them
+            for resource in [
+                "module.infisical.docker_container.infisical[0]",
+                "module.infisical.docker_container.postgres[0]",
+                "module.infisical.docker_container.redis[0]",
+                "module.infisical.docker_network.infisical[0]",
+                "module.infisical.docker_volume.postgres_data[0]",
+                "module.infisical.docker_volume.redis_data[0]",
+            ]:
+                run_cmd(["terraform", "state", "rm", resource], cwd=str(self.project_root), check=False)
             if not self.terraform_apply(target="module.infisical"):
                 return False
 
