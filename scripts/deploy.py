@@ -441,19 +441,7 @@ class Deployer:
         # Re-init to pick up any provider changes
         self.terraform_init(upgrade=True)
 
-        # Remove stale Infisical resources from state (they may have wrong permissions)
-        # This prevents 403 errors when admin_token changed
-        stale_resources = [
-            "module.infisical.infisical_project.main[0]",
-            "module.infisical.infisical_project_environment.production[0]",
-            "module.infisical.infisical_identity.terraform_controller[0]",
-            "module.infisical.infisical_identity_universal_auth.terraform_controller[0]",
-            "module.infisical.infisical_identity_universal_auth_client_secret.terraform_controller[0]",
-        ]
-        for resource in stale_resources:
-            run_cmd(["terraform", "state", "rm", resource], cwd=str(self.project_root), check=False)
-
-        # Full apply
+        # Full apply (Terraform will detect existing resources and update state)
         if not self.terraform_apply():
             return False
 
@@ -773,15 +761,12 @@ class Deployer:
             if not self.phase2(docker_host, docker_ssh_user):
                 return False
 
-            # Phase 3: Bootstrap
+            # Phase 3: Bootstrap (also applies all Infisical resources)
             if not self.has_credentials():
                 if not self.bootstrap():
                     log_warn("Bootstrap not completed. Run 'make bootstrap' when ready.")
                     return True
-
-            # Phase 4: Apply Infisical resources
-            if not self.phase4(docker_host):
-                return False
+            # Note: Phase 4 removed - bootstrap() already does full terraform_apply()
         else:
             log_info("Infisical disabled (enable_infisical = false), skipping phases 2-4")
 
