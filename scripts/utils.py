@@ -18,22 +18,22 @@ class Colors:
 
 def log_info(msg: str) -> None:
     """Log info message in green."""
-    print(f"{Colors.GREEN}[INFO]{Colors.NC} {msg}")
+    print(f"{Colors.GREEN}[INFO]{Colors.NC} {msg}", file=sys.stderr)
 
 
 def log_warn(msg: str) -> None:
     """Log warning message in yellow."""
-    print(f"{Colors.YELLOW}[WARN]{Colors.NC} {msg}")
+    print(f"{Colors.YELLOW}[WARN]{Colors.NC} {msg}", file=sys.stderr)
 
 
 def log_error(msg: str) -> None:
     """Log error message in red."""
-    print(f"{Colors.RED}[ERROR]{Colors.NC} {msg}")
+    print(f"{Colors.RED}[ERROR]{Colors.NC} {msg}", file=sys.stderr)
 
 
 def log_step(msg: str) -> None:
     """Log step message in blue."""
-    print(f"{Colors.BLUE}[STEP]{Colors.NC} {msg}")
+    print(f"{Colors.BLUE}[STEP]{Colors.NC} {msg}", file=sys.stderr)
 
 
 def run_cmd(
