@@ -32,7 +32,7 @@ module "infisical" {
   server_url   = "http://${local.docker_host_ip}:${var.infisical_port}"
   project_name = var.infisical_project_name
 
-  # Bootstrap outputs (from .auto.tfvars)
+  # Bootstrap outputs (from TF_VAR_* environment variables)
   admin_token = var.infisical_admin_token
   org_id      = var.infisical_org_id
 
