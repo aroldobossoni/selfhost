@@ -39,13 +39,6 @@ def list_tokens(proxmox_host: str, ssh_user: str, pve_user: str) -> list:
         return []
 
 
-def token_exists(proxmox_host: str, ssh_user: str, pve_user: str, token_name: str) -> bool:
-    """Check if a token with given name exists."""
-    tokens = list_tokens(proxmox_host, ssh_user, pve_user)
-    # Token list returns just the token name, not full-tokenid
-    return any(token.get("tokenid", "") == token_name for token in tokens)
-
-
 def remove_token(proxmox_host: str, ssh_user: str, token_id: str) -> bool:
     """Remove a Proxmox token."""
     try:

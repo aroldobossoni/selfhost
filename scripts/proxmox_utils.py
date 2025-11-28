@@ -1,6 +1,5 @@
 """Proxmox utility functions for LXC management via SSH."""
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -8,7 +7,7 @@ from pathlib import Path
 sys_path = Path(__file__).parent.parent
 sys.path.insert(0, str(sys_path))
 
-from scripts.utils import log_info, log_warn, log_error, run_cmd
+from scripts.utils import log_info, log_error, run_cmd
 
 
 def download_template(proxmox_host: str, ssh_user: str, storage: str, template_name: str) -> bool:
