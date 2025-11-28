@@ -53,3 +53,8 @@ output "postgres_password" {
   value       = local.postgres_password
   sensitive   = true
 }
+
+output "project_id" {
+  description = "Infisical project ID"
+  value       = var.enabled && length(infisical_project.main) > 0 ? infisical_project.main[0].id : ""
+}

@@ -16,7 +16,7 @@ Infraestrutura como código para gerenciar serviços self-hosted no Proxmox VE u
 - Terraform >= 1.14.0
 - Python 3.x
 - Acesso SSH ao Proxmox VE (chave configurada)
-- Token API do Proxmox VE
+- Token API do Proxmox VE (criado manualmente uma vez, depois auto-gerenciado)
 
 ## Quick Start
 
@@ -76,11 +76,28 @@ make apply
 | `postgres_password` | Senha do PostgreSQL |
 | `encryption_key` | Chave AES-256 |
 | `jwt_signing_key` | Chave JWT |
+| `proxmox_token` | Token Proxmox (rotacionado semanalmente) |
 
 Para ver uma credencial:
 ```bash
 terraform output docker_lxc_password
 ```
+
+## Token Proxmox Auto-Gerenciado
+
+O projeto gerencia automaticamente o token Proxmox após o Infisical estar operacional:
+
+1. **Primeira execução**: Crie um token manualmente no Proxmox UI e exporte como variáveis de ambiente:
+   ```bash
+   export TF_VAR_pm_api_token_id="root@pam!bootstrap"
+   export TF_VAR_pm_api_token_secret="your-secret"
+   ```
+
+2. **Após Infisical**: O sistema cria automaticamente um novo token via SSH e armazena no Infisical
+
+3. **Rotação**: O token é rotacionado automaticamente a cada 7 dias
+
+4. **Reinstalação**: Em um Proxmox novo/virgem, o sistema detecta ausência e cria novo token automaticamente
 
 ## Configuração
 

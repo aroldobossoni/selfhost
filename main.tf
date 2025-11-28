@@ -42,5 +42,11 @@ module "infisical" {
   client_id     = var.infisical_client_id
   client_secret = var.infisical_client_secret
 
+  # Proxmox token management
+  proxmox_host      = var.pm_host
+  proxmox_ssh_user  = var.proxmox_ssh_user
+  proxmox_pve_user  = var.proxmox_pve_user
+  proxmox_token_name = var.proxmox_token_name
+
   depends_on = [module.docker_lxc]
 }

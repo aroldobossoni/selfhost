@@ -41,6 +41,18 @@ variable "proxmox_ssh_user" {
   default     = "root"
 }
 
+variable "proxmox_pve_user" {
+  description = "Proxmox PVE user for token creation (e.g., root@pam)"
+  type        = string
+  default     = "root@pam"
+}
+
+variable "proxmox_token_name" {
+  description = "Name for the Proxmox API token"
+  type        = string
+  default     = "terraform"
+}
+
 variable "docker_ssh_user" {
   description = "SSH user for Docker LXC container"
   type        = string

@@ -16,6 +16,7 @@ import sys
 import os
 import shutil
 import time
+import json
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -23,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.utils import (
     log_info, log_warn, log_error, log_step,
-    run_cmd, get_project_root, read_tfvars,
+    run_cmd, get_project_root, read_tfvars, write_tfvars,
     check_ssh, check_docker, terraform_output, ensure_ssh_key
 )
 from scripts.infisical_client import InfisicalClient
@@ -432,6 +433,140 @@ class Deployer:
         if not self.check_tools():
             return False
 
+        # Ensure Proxmox token exists (create if missing or invalid)
+        proxmox_host = read_tfvars("pm_host")
+        proxmox_ssh_user = read_tfvars("proxmox_ssh_user")
+        proxmox_pve_user = read_tfvars("proxmox_pve_user") or "root@pam"
+        proxmox_token_name = read_tfvars("proxmox_token_name") or "terraform"
+        current_token_id = read_tfvars("pm_api_token_id")
+        current_token_secret = read_tfvars("pm_api_token_secret")
+        pm_api_url = read_tfvars("pm_api_url")
+        
+        # Always try to ensure token exists before Terraform uses it
+        if proxmox_host and proxmox_ssh_user:
+            log_step("Ensuring Proxmox token exists...")
+            token_needs_creation = False
+            
+            # Check if token is configured
+            if not current_token_id or not current_token_secret:
+                log_info("No Proxmox token configured, will create one")
+                token_needs_creation = True
+            else:
+                # Token configured, verify it exists on Proxmox
+                log_info(f"Verifying Proxmox token: {current_token_id}")
+                try:
+                    # Try to list tokens to verify it exists
+                    result = run_cmd(
+                        [
+                            "ssh", "-o", "StrictHostKeyChecking=no",
+                            f"{proxmox_ssh_user}@{proxmox_host}",
+                            f"pveum user token list {proxmox_pve_user} --output-format json"
+                        ],
+                        capture=True,
+                        check=False
+                    )
+                    if result.returncode == 0:
+                        tokens = json.loads(result.stdout)
+                        token_exists = any(t.get("tokenid", "") == proxmox_token_name for t in tokens)
+                        if not token_exists:
+                            log_warn(f"Token {current_token_id} not found on Proxmox, will create new one")
+                            token_needs_creation = True
+                        else:
+                            log_info("Proxmox token verified")
+                    else:
+                        log_warn("Could not verify token, will try to create if needed")
+                        token_needs_creation = True
+                except Exception as e:
+                    log_warn(f"Could not verify token: {e}, will try to create if needed")
+                    token_needs_creation = True
+            
+            # Create token if needed
+            if token_needs_creation:
+                log_step("Creating Proxmox token...")
+                try:
+                    result = run_cmd(
+                        [
+                            sys.executable,
+                            str(self.project_root / "scripts" / "proxmox_token.py"),
+                            proxmox_host,
+                            proxmox_ssh_user,
+                            proxmox_pve_user,
+                            proxmox_token_name
+                        ],
+                        capture=True,
+                        check=False
+                    )
+                    if result.returncode == 0:
+                        # Parse token from JSON output
+                        try:
+                            token_data = json.loads(result.stdout)
+                            token_id = token_data.get("token_id", "")
+                            token_secret = token_data.get("token_secret", "")
+                            if token_id and token_secret and token_secret != "SECRET_NOT_AVAILABLE":
+                                # Update terraform.tfvars
+                                write_tfvars("pm_api_token_id", token_id)
+                                write_tfvars("pm_api_token_secret", token_secret)
+                                log_info(f"Created and saved Proxmox token: {token_id}")
+                            else:
+                                log_error("Failed to parse token from script output")
+                                log_error(f"Output: {result.stdout}")
+                                return False
+                        except json.JSONDecodeError:
+                            log_error(f"Script output is not valid JSON: {result.stdout}")
+                            return False
+                    else:
+                        # Check if token already exists error - try to rotate to get secret
+                        if "already exists" in result.stdout.lower() or "already exists" in (result.stderr or "").lower():
+                            log_warn("Token already exists but secret not available, rotating to get new secret...")
+                            # Try to rotate to get a new secret
+                            rotate_result = run_cmd(
+                                [
+                                    sys.executable,
+                                    str(self.project_root / "scripts" / "proxmox_token.py"),
+                                    proxmox_host,
+                                    proxmox_ssh_user,
+                                    proxmox_pve_user,
+                                    proxmox_token_name,
+                                    "--rotate"
+                                ],
+                                capture=True,
+                                check=False
+                            )
+                            if rotate_result.returncode == 0:
+                                try:
+                                    token_data = json.loads(rotate_result.stdout)
+                                    token_id = token_data.get("token_id", "")
+                                    token_secret = token_data.get("token_secret", "")
+                                    if token_id and token_secret:
+                                        write_tfvars("pm_api_token_id", token_id)
+                                        write_tfvars("pm_api_token_secret", token_secret)
+                                        log_info(f"Rotated and saved Proxmox token: {token_id}")
+                                    else:
+                                        log_error("Failed to parse rotated token")
+                                        return False
+                                except json.JSONDecodeError:
+                                    log_error(f"Rotated token output is not valid JSON: {rotate_result.stdout}")
+                                    return False
+                            else:
+                                log_error("Could not rotate existing token")
+                                log_error(f"Output: {rotate_result.stdout}")
+                                return False
+                        else:
+                            log_error("Could not create Proxmox token automatically")
+                            log_error(f"Script output: {result.stdout}")
+                            if result.stderr:
+                                log_error(f"Script error: {result.stderr}")
+                            log_error("Please create token manually:")
+                            log_error(f"  ssh {proxmox_ssh_user}@{proxmox_host} 'pveum user token add {proxmox_pve_user} {proxmox_token_name}'")
+                            log_error("Or set TF_VAR_pm_api_token_* environment variables")
+                            return False
+                except json.JSONDecodeError as e:
+                    log_error(f"Could not parse token JSON: {e}")
+                    return False
+                except Exception as e:
+                    log_error(f"Could not create Proxmox token: {e}")
+                    return False
+
         # Ensure SSH key
         _, public_key = ensure_ssh_key()
 
@@ -536,6 +671,8 @@ class Deployer:
         # 1. Remove Infisical provider resources from state (avoid auth errors)
         log_info("Removing Infisical resources from state...")
         infisical_resources = [
+            "infisical_secret.proxmox_token_id[0]",
+            "infisical_secret.proxmox_token_secret[0]",
             "infisical_secret.postgres_password[0]",
             "infisical_secret.encryption_key[0]",
             "infisical_secret.jwt_signing_key[0]",
@@ -547,6 +684,7 @@ class Deployer:
             "infisical_identity.terraform_controller[0]",
             "local_file.infisical_credentials[0]",
             "null_resource.bootstrap_infisical[0]",
+            "null_resource.proxmox_token[0]",
         ]
         for resource in infisical_resources:
             run_cmd(

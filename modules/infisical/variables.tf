@@ -118,3 +118,28 @@ variable "postgres_db" {
   type        = string
   default     = "infisical"
 }
+
+# Proxmox Token Management
+variable "proxmox_host" {
+  description = "Proxmox host IP or hostname for SSH token creation"
+  type        = string
+  default     = ""
+}
+
+variable "proxmox_ssh_user" {
+  description = "SSH user for Proxmox host"
+  type        = string
+  default     = "root"
+}
+
+variable "proxmox_pve_user" {
+  description = "Proxmox PVE user for token creation (e.g., root@pam)"
+  type        = string
+  default     = "root@pam"
+}
+
+variable "proxmox_token_name" {
+  description = "Name for the Proxmox API token"
+  type        = string
+  default     = "terraform"
+}
