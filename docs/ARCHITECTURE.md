@@ -21,10 +21,10 @@ flowchart TB
             M_INFISICAL["module: infisical"]
         end
         
-        subgraph Infisical_TF["Infisical Resources"]
-            BOOTSTRAP["bootstrap.tf"]
-            IDENTITY["infisical_identity.tf"]
-            RESOURCES["infisical_resources.tf"]
+        subgraph Infisical_TF["modules/infisical/"]
+            IDENTITY["identity.tf"]
+            RESOURCES["resources.tf"]
+            PROXMOX_TF["proxmox_token.tf"]
         end
     end
 
@@ -32,9 +32,8 @@ flowchart TB
         BOOTSTRAP_PY["bootstrap_infisical.py"]
         UTILS["utils.py"]
         INFISICAL_CLIENT["infisical_client.py"]
-        DOCKER_CLIENT["docker_client.py"]
-        DL_SCRIPT["download_template.sh"]
-        INST_SCRIPT["install_docker.sh"]
+        PROXMOX_TOKEN["proxmox_token.py"]
+        PROXMOX_UTILS["proxmox_utils.py"]
     end
 
     subgraph Proxmox["Proxmox VE"]
@@ -65,17 +64,17 @@ flowchart TB
     
     PROVIDERS -->|"API Token"| API
     
-    M_DOCKER -->|"null_resource"| DL_SCRIPT
+    M_DOCKER -->|"null_resource"| PROXMOX_UTILS
     M_DOCKER -->|"proxmox_lxc"| API
-    M_DOCKER -->|"null_resource"| INST_SCRIPT
     
     M_INFISICAL -->|"docker_container"| DOCKER
+    M_INFISICAL -->|"data.external"| PROXMOX_TOKEN
     
     BOOTSTRAP -->|"local-exec"| BOOTSTRAP_PY
     BOOTSTRAP_PY --> INFISICAL_CLIENT
     
-    DL_SCRIPT -->|"pveam download"| SSH
-    INST_SCRIPT -->|"pct exec"| SSH
+    PROXMOX_UTILS -->|"pveam download / pct exec"| SSH
+    PROXMOX_TOKEN -->|"pveum token"| SSH
     
     DOCKER --> POSTGRES
     DOCKER --> REDIS
@@ -149,15 +148,14 @@ sequenceDiagram
 |-----------|---------|
 | `main.tf` | Root module, instantiates docker_lxc and infisical modules |
 | `providers.tf` | Proxmox and Docker provider configuration |
-| `random.tf` | Auto-generates passwords (docker_lxc, postgres, infisical) |
+| `random.tf` | Auto-generates password for docker_lxc |
 | `data_container_ip.tf` | Gets container IP dynamically from Proxmox API |
-| `bootstrap.tf` | Orchestrates Infisical bootstrap via Python script |
-| `infisical_identity.tf` | Creates Machine Identity with Universal Auth |
-| `infisical_resources.tf` | Manages Infisical projects and secrets |
 | `modules/docker_lxc/` | Creates unprivileged LXC with Docker |
-| `modules/infisical/` | Deploys Infisical stack (PostgreSQL, Redis, Infisical) |
+| `modules/infisical/` | Deploys Infisical stack, Machine Identity, secrets |
 | `scripts/deploy.py` | Main orchestration script |
 | `scripts/bootstrap_infisical.py` | Performs initial Infisical bootstrap |
+| `scripts/proxmox_token.py` | Creates/rotates Proxmox API tokens |
+| `scripts/proxmox_utils.py` | Template download and Docker install |
 
 ## Auto-Generated Credentials
 

@@ -18,6 +18,8 @@ import shutil
 import time
 import json
 from pathlib import Path
+import requests
+from requests.exceptions import RequestException
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,10 +27,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.utils import (
     log_info, log_warn, log_error, log_step,
     run_cmd, get_project_root, read_tfvars, write_tfvars,
-    check_ssh, check_docker, terraform_output, ensure_ssh_key
+    check_ssh, check_docker, terraform_output, ensure_ssh_key,
+    cleanup_docker_resources, copy_ssh_key_to_container
 )
 from scripts.infisical_client import InfisicalClient
-from scripts.docker_client import cleanup_docker_resources, copy_ssh_key_to_container
 
 
 def check_dependencies(auto_install: bool = True) -> bool:
@@ -137,7 +139,6 @@ class Deployer:
 
     def __init__(self):
         self.project_root = get_project_root()
-        self.credentials_file = self.project_root / "infisical_token.auto.tfvars"
         self.backup_dir = self.project_root / "tfstate.backup"
 
     def check_tools(self) -> bool:
@@ -237,9 +238,8 @@ class Deployer:
             return False
 
     def has_credentials(self) -> bool:
-        """Check if Infisical credentials exist (in Infisical, state, or environment)."""
+        """Check if Infisical credentials exist (in environment, Terraform outputs, or Infisical)."""
         # Check environment variables first
-        import os
         if os.getenv("TF_VAR_infisical_client_id") and os.getenv("TF_VAR_infisical_client_secret"):
             return True
         
@@ -269,43 +269,7 @@ class Deployer:
             except Exception as e:
                 log_warn(f"Could not check Infisical for credentials: {e}")
         
-        # Fallback: check files (for migration period)
-        if self.credentials_file.exists():
-            with open(self.credentials_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-            if "infisical_client_id" in content and "infisical_client_secret" in content and '""' not in content:
-                return True
-        
         return False
-
-    def has_bootstrap_token(self) -> bool:
-        """Check if bootstrap token exists (in environment or Infisical)."""
-        # Check environment variables first
-        import os
-        if os.getenv("TF_VAR_infisical_admin_token") and os.getenv("TF_VAR_infisical_org_id"):
-            return True
-        
-        # Fallback: check files (for migration period)
-        bootstrap_file = self.project_root / "infisical_bootstrap.auto.tfvars"
-        if bootstrap_file.exists():
-            with open(bootstrap_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-            if "infisical_admin_token" in content and '""' not in content:
-                return True
-        
-        return False
-
-    def save_credentials(self, client_id: str, client_secret: str, token: str = "") -> None:
-        """Save Infisical credentials to auto.tfvars file."""
-        log_info(f"Saving credentials to {self.credentials_file.name}...")
-
-        with open(self.credentials_file, 'w', encoding='utf-8') as f:
-            f.write(f'infisical_client_id     = "{client_id}"\n')
-            f.write(f'infisical_client_secret = "{client_secret}"\n')
-            if token:
-                f.write(f'infisical_token         = "{token}"\n')
-
-        log_info("Credentials saved")
 
     def get_enable_infisical(self) -> bool:
         """Get current enable_infisical value from terraform.tfvars."""
@@ -348,50 +312,12 @@ class Deployer:
         infisical_url = f"http://{docker_host}:{infisical_port}"
         log_info(f"Waiting for Infisical API at {infisical_url}...")
         
-        import time
-        for i in range(60):
-            try:
-                import urllib.request
-                req = urllib.request.Request(f"{infisical_url}/api/status", method="GET")
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    if resp.status == 200:
-                        log_info("Infisical API is ready!")
-                        break
-            except Exception:
-                pass
-            time.sleep(2)
-        else:
+        client = InfisicalClient(docker_host, int(infisical_port))
+        if not client.wait_for_api(max_retries=60):
             log_warn("Infisical API not ready after 2 minutes, continuing anyway...")
 
         log_info("Phase 2 complete!")
         return True
-
-    def get_credentials_from_infisical(self, docker_host: str, infisical_port: str, project_id: str, env_slug: str = "production") -> dict | None:
-        """Try to get credentials from Infisical if they exist."""
-        try:
-            client = InfisicalClient(docker_host, int(infisical_port))
-            
-            # Try to get client_id and client_secret from Infisical
-            # First, we need to authenticate - try with admin token if available
-            import os
-            admin_token = os.getenv("TF_VAR_infisical_admin_token")
-            if not admin_token:
-                return None
-            
-            # Get secrets from Infisical
-            client_id = client.get_secret(project_id, env_slug, "INFISICAL_CLIENT_ID", admin_token)
-            client_secret = client.get_secret(project_id, env_slug, "INFISICAL_CLIENT_SECRET", admin_token)
-            
-            if client_id and client_secret:
-                log_info("Found existing credentials in Infisical")
-                return {
-                    "client_id": client_id,
-                    "client_secret": client_secret
-                }
-        except Exception as e:
-            log_warn(f"Could not retrieve credentials from Infisical: {e}")
-        
-        return None
 
     def bootstrap(self) -> bool:
         """Phase 3: Bootstrap Infisical and create Machine Identity."""
@@ -420,7 +346,6 @@ class Deployer:
             return False
 
         # Step 1: Check if bootstrap token exists (environment or Infisical)
-        import os
         admin_token = os.getenv("TF_VAR_infisical_admin_token")
         org_id = os.getenv("TF_VAR_infisical_org_id")
         
@@ -517,20 +442,9 @@ class Deployer:
             infisical_port = read_tfvars("infisical_port") or "8080"
             infisical_url = f"http://{docker_host}:{infisical_port}"
             
-            import time
             log_info(f"Checking Infisical API at {infisical_url}...")
-            for i in range(30):
-                try:
-                    import urllib.request
-                    req = urllib.request.Request(f"{infisical_url}/api/status", method="GET")
-                    with urllib.request.urlopen(req, timeout=5) as resp:
-                        if resp.status == 200:
-                            log_info("Infisical API is accessible!")
-                            break
-                except Exception:
-                    pass
-                time.sleep(2)
-            else:
+            client = InfisicalClient(docker_host, int(infisical_port))
+            if not client.wait_for_api(max_retries=30):
                 log_error("Infisical API not accessible. Ensure containers are running.")
                 return False
 
@@ -574,16 +488,15 @@ class Deployer:
         if proxmox_host and proxmox_ssh_user:
             log_step("Ensuring Proxmox token exists...")
             token_needs_creation = False
+            token_needs_rotation = False
             
             # Check if token is configured
             if not current_token_id or not current_token_secret:
                 log_info("No Proxmox token configured, will create one")
                 token_needs_creation = True
-                token_needs_rotation = False
             else:
                 # Token configured, verify it exists on Proxmox AND validate secret
                 log_info(f"Verifying Proxmox token: {current_token_id}")
-                token_needs_rotation = False
                 try:
                     # Try to list tokens to verify it exists
                     result = run_cmd(
@@ -605,34 +518,25 @@ class Deployer:
                             # Token exists, but we can't verify secret via SSH
                             # Try a quick API call to validate the secret
                             log_info("Token exists, validating secret via API...")
-                            import urllib.request
-                            import ssl
                             try:
-                                # Create SSL context that ignores certificate errors
-                                ctx = ssl.create_default_context()
-                                ctx.check_hostname = False
-                                ctx.verify_mode = ssl.CERT_NONE
-                                
-                                req = urllib.request.Request(
+                                resp = requests.get(
                                     f"{pm_api_url}/version",
-                                    headers={"Authorization": f"PVEAPIToken={current_token_id}={current_token_secret}"}
+                                    headers={"Authorization": f"PVEAPIToken={current_token_id}={current_token_secret}"},
+                                    timeout=5,
+                                    verify=read_tfvars("pm_tls_insecure") != "true"
                                 )
-                                with urllib.request.urlopen(req, timeout=5, context=ctx) as resp:
-                                    if resp.status == 200:
-                                        log_info("Proxmox token validated successfully")
-                                    else:
-                                        log_warn(f"Token validation returned status {resp.status}, will rotate")
-                                        token_needs_rotation = True
-                            except urllib.error.HTTPError as e:
-                                if e.code == 401:
+                                if resp.status_code == 200:
+                                    log_info("Proxmox token validated successfully")
+                                else:
+                                    log_warn(f"Token validation returned status {resp.status_code}, will rotate")
+                                    token_needs_rotation = True
+                            except RequestException as e:
+                                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 401:
                                     log_warn("Token secret is invalid, will rotate to get new secret")
                                     token_needs_rotation = True
                                 else:
-                                    log_warn(f"API validation failed ({e.code}), will rotate to be safe")
+                                    log_warn(f"Could not validate token via API: {e}, will rotate to be safe")
                                     token_needs_rotation = True
-                            except Exception as e:
-                                log_warn(f"Could not validate token via API: {e}, will rotate to be safe")
-                                token_needs_rotation = True
                     else:
                         log_warn("Could not verify token, will try to create if needed")
                         token_needs_creation = True
@@ -717,7 +621,7 @@ class Deployer:
                             token_data = json.loads(json_line)
                             token_id = token_data.get("token_id", "")
                             token_secret = token_data.get("token_secret", "")
-                            if token_id and token_secret and token_secret != "SECRET_NOT_AVAILABLE":
+                            if token_id and token_secret:
                                 # Update terraform.tfvars
                                 write_tfvars("pm_api_token_id", token_id)
                                 write_tfvars("pm_api_token_secret", token_secret)
@@ -749,7 +653,15 @@ class Deployer:
                             )
                             if rotate_result.returncode == 0:
                                 try:
-                                    token_data = json.loads(rotate_result.stdout)
+                                    # Extract JSON line from output (logs go to stderr, JSON to stdout)
+                                    json_line = None
+                                    for line in rotate_result.stdout.strip().split('\n'):
+                                        if line.strip().startswith('{'):
+                                            json_line = line.strip()
+                                    if not json_line:
+                                        log_error(f"No JSON found in rotated token output: {rotate_result.stdout}")
+                                        return False
+                                    token_data = json.loads(json_line)
                                     token_id = token_data.get("token_id", "")
                                     token_secret = token_data.get("token_secret", "")
                                     if token_id and token_secret:
@@ -759,8 +671,9 @@ class Deployer:
                                     else:
                                         log_error("Failed to parse rotated token")
                                         return False
-                                except json.JSONDecodeError:
-                                    log_error(f"Rotated token output is not valid JSON: {rotate_result.stdout}")
+                                except json.JSONDecodeError as e:
+                                    log_error(f"Rotated token output is not valid JSON: {e}")
+                                    log_error(f"Output: {rotate_result.stdout}")
                                     return False
                             else:
                                 log_error("Could not rotate existing token")
@@ -929,11 +842,6 @@ class Deployer:
         if not self.terraform_destroy(refresh=False):
             log_warn("Terraform destroy had errors, continuing cleanup...")
 
-        # 5. Clean credential files
-        log_info("Cleaning credential files...")
-        for f in Path(self.project_root).glob("*.auto.tfvars"):
-            f.unlink()
-            log_info(f"Removed {f.name}")
 
         log_info("Destroy complete!")
         return True

@@ -14,13 +14,12 @@ modules/
 └── infisical/      # Stack Infisical (PostgreSQL, Redis, Infisical)
 
 scripts/
-├── deploy.py       # Orquestração principal
+├── deploy.py             # Orquestração principal
 ├── bootstrap_infisical.py
-├── utils.py
+├── utils.py              # Utilitários e cleanup Docker
 ├── infisical_client.py
-├── docker_client.py
-├── download_template.sh
-└── install_docker.sh
+├── proxmox_token.py      # Gerenciamento de tokens Proxmox
+└── proxmox_utils.py      # Template download e Docker install
 ```
 
 ## Convenções
@@ -80,7 +79,6 @@ Sempre que existir um resource/data source no Terraform provider, usar Terraform
 | `*.auto.tfvars` | Gerados pelo bootstrap (não versionado) |
 | `random.tf` | Geração de todas as credenciais |
 | `data_container_ip.tf` | IP dinâmico via API Proxmox |
-| `bootstrap.tf` | Orquestração do bootstrap |
 
 ## Testes
 

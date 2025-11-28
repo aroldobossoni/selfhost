@@ -42,9 +42,10 @@ make apply
 ├── scripts/
 │   ├── deploy.py             # Orquestração principal
 │   ├── bootstrap_infisical.py # Bootstrap do Infisical
-│   ├── utils.py              # Utilitários
+│   ├── utils.py              # Utilitários e cleanup Docker
 │   ├── infisical_client.py   # Cliente API Infisical
-│   └── docker_client.py      # Cliente Docker via SSH
+│   ├── proxmox_token.py      # Gerenciamento de tokens Proxmox
+│   └── proxmox_utils.py      # Template download e Docker install
 ├── docs/
 │   ├── ARCHITECTURE.md       # Diagramas e fluxos
 │   ├── HARDCODES.md          # Relatório de credenciais
@@ -52,9 +53,6 @@ make apply
 ├── main.tf                   # Configuração principal
 ├── random.tf                 # Geração de senhas
 ├── data_container_ip.tf      # IP dinâmico via API
-├── bootstrap.tf              # Bootstrap Infisical
-├── infisical_identity.tf     # Machine Identity
-├── infisical_resources.tf    # Projetos e secrets
 └── Makefile                  # Comandos make
 ```
 

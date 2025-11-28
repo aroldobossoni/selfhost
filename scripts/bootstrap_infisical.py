@@ -14,11 +14,13 @@ Outputs:
 
 import sys
 import json
-import time
 from pathlib import Path
-
 import requests
 from requests.exceptions import RequestException
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from scripts.infisical_client import InfisicalClient
 
 
 def log_info(msg: str) -> None:
@@ -27,27 +29,6 @@ def log_info(msg: str) -> None:
 
 def log_error(msg: str) -> None:
     print(f"[ERROR] {msg}", file=sys.stderr)
-
-
-def wait_for_api(base_url: str, max_retries: int = 60) -> bool:
-    """Wait for Infisical API to be ready."""
-    log_info(f"Waiting for Infisical API at {base_url}...")
-
-    for i in range(max_retries):
-        try:
-            resp = requests.get(f"{base_url}/api/status", timeout=5)
-            if resp.status_code == 200:
-                log_info("Infisical API is ready!")
-                return True
-        except RequestException:
-            pass
-
-        if i > 0 and i % 10 == 0:
-            log_info(f"Still waiting... ({i}/{max_retries})")
-        time.sleep(2)
-
-    log_error("Infisical API not ready after timeout")
-    return False
 
 
 def check_existing_bootstrap(base_url: str, email: str, password: str) -> dict | None:
@@ -138,8 +119,14 @@ def main():
     org_name = sys.argv[4]
     check_existing = "--check-existing" in sys.argv
 
-    # Wait for API
-    if not wait_for_api(url):
+    # Parse host and port from URL
+    url_parts = url.replace("http://", "").replace("https://", "").split(":")
+    host = url_parts[0]
+    port = int(url_parts[1]) if len(url_parts) > 1 else 8080
+    
+    # Wait for API using InfisicalClient
+    client = InfisicalClient(host, port)
+    if not client.wait_for_api():
         sys.exit(1)
 
     # Check for existing bootstrap first if requested

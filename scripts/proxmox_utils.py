@@ -156,8 +156,6 @@ def install_docker(
 
 def main():
     """CLI entry point for standalone execution."""
-    import sys
-    
     if len(sys.argv) < 2:
         print("Usage:")
         print("  download_template <proxmox_host> <ssh_user> <storage> <template_name>")
