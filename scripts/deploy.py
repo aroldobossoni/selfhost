@@ -238,36 +238,19 @@ class Deployer:
             return False
 
     def has_credentials(self) -> bool:
-        """Check if Infisical credentials exist (in environment, Terraform outputs, or Infisical)."""
+        """Check if Infisical credentials exist (in environment or Terraform outputs)."""
         # Check environment variables first
         if os.getenv("TF_VAR_infisical_client_id") and os.getenv("TF_VAR_infisical_client_secret"):
             return True
         
-        # Check Terraform outputs
+        # Check Terraform outputs (Machine Identity created by Terraform)
         client_id = terraform_output("infisical_client_id")
         client_secret = terraform_output("infisical_client_secret")
         if client_id and client_secret:
+            # Export for Terraform provider in subsequent runs
+            os.environ["TF_VAR_infisical_client_id"] = client_id
+            os.environ["TF_VAR_infisical_client_secret"] = client_secret
             return True
-        
-        # Try to get from Infisical if available
-        docker_host = terraform_output("docker_container_ip")
-        infisical_port = read_tfvars("infisical_port") or "8080"
-        project_id = terraform_output("infisical_project_id")
-        admin_token = os.getenv("TF_VAR_infisical_admin_token")
-        
-        if docker_host and docker_host != "dhcp" and project_id and admin_token:
-            try:
-                client = InfisicalClient(docker_host, int(infisical_port))
-                client_id = client.get_secret(project_id, "production", "INFISICAL_CLIENT_ID", admin_token)
-                client_secret = client.get_secret(project_id, "production", "INFISICAL_CLIENT_SECRET", admin_token)
-                if client_id and client_secret:
-                    log_info("Found credentials in Infisical")
-                    # Export for Terraform
-                    os.environ["TF_VAR_infisical_client_id"] = client_id
-                    os.environ["TF_VAR_infisical_client_secret"] = client_secret
-                    return True
-            except Exception as e:
-                log_warn(f"Could not check Infisical for credentials: {e}")
         
         return False
 
