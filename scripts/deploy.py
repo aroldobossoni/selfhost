@@ -72,7 +72,7 @@ def check_dependencies(auto_install: bool = True) -> bool:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [sys.executable, "-m", "venv", f"{tmpdir}/test_venv"],
-                capture_output=True, text=True
+                capture_output=True, text=True, check=False
             )
             venv_ok = result.returncode == 0
     except Exception:
@@ -86,7 +86,7 @@ def check_dependencies(auto_install: bool = True) -> bool:
 
     # Check pip
     try:
-        import pip  # noqa: F401
+        import pip  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
         log_info("✓ pip")
     except ImportError:
         apt_packages.append("python3-pip")
@@ -97,7 +97,7 @@ def check_dependencies(auto_install: bool = True) -> bool:
         log_step(f"Installing: {' '.join(apt_packages)}")
         result = subprocess.run(
             ["sudo", "apt", "install", "-y"] + apt_packages,
-            capture_output=False
+            capture_output=False, check=False
         )
         if result.returncode != 0:
             log_error("Failed to install packages. Run manually:")
@@ -242,7 +242,7 @@ class Deployer:
         # Check environment variables first
         if os.getenv("TF_VAR_infisical_client_id") and os.getenv("TF_VAR_infisical_client_secret"):
             return True
-        
+
         # Check Terraform outputs (Machine Identity created by Terraform)
         client_id = terraform_output("infisical_client_id")
         client_secret = terraform_output("infisical_client_secret")
@@ -251,7 +251,7 @@ class Deployer:
             os.environ["TF_VAR_infisical_client_id"] = client_id
             os.environ["TF_VAR_infisical_client_secret"] = client_secret
             return True
-        
+
         return False
 
     def get_enable_infisical(self) -> bool:
@@ -302,7 +302,7 @@ class Deployer:
         infisical_port = read_tfvars("infisical_port") or "8080"
         infisical_url = f"http://{docker_host}:{infisical_port}"
         log_info(f"Waiting for Infisical API at {infisical_url}...")
-        
+
         client = InfisicalClient(docker_host, int(infisical_port))
         if not client.wait_for_api(max_retries=60):
             log_warn("Infisical API not ready after 2 minutes, continuing anyway...")
@@ -319,19 +319,18 @@ class Deployer:
         if not docker_host or docker_host == "dhcp":
             log_error("Could not get Docker host IP")
             return False
-        
+
         infisical_port = read_tfvars("infisical_port") or "8080"
         infisical_url = f"http://{docker_host}:{infisical_port}"
-        
+
         admin_email = read_tfvars("infisical_admin_email")
         org_name = read_tfvars("infisical_org_name")
         admin_password = terraform_output("infisical_admin_password")
-        project_name = read_tfvars("infisical_project_name") or "selfhost"
-        
+
         if not admin_email or not org_name:
             log_error("infisical_admin_email and infisical_org_name must be set")
             return False
-        
+
         if not admin_password:
             log_error("Could not get admin password from Terraform state")
             return False
@@ -339,7 +338,7 @@ class Deployer:
         # Step 1: Check if bootstrap token exists (environment or Infisical)
         admin_token = os.getenv("TF_VAR_infisical_admin_token")
         org_id = os.getenv("TF_VAR_infisical_org_id")
-        
+
         if not admin_token or not org_id:
             log_info("Running bootstrap script (creates admin user and org)...")
             try:
@@ -356,19 +355,19 @@ class Deployer:
                     capture=True,
                     check=False
                 )
-                
+
                 if result.returncode == 0:
                     # Parse JSON from stdout (logs go to stderr)
                     json_line = None
                     for line in result.stdout.strip().split('\n'):
                         if line.strip().startswith('{'):
                             json_line = line.strip()
-                    
+
                     if json_line:
                         bootstrap_data = json.loads(json_line)
                         admin_token = bootstrap_data.get("token")
                         org_id = bootstrap_data.get("org_id")
-                        
+
                         if admin_token and org_id:
                             # Export as environment variables for Terraform
                             os.environ["TF_VAR_infisical_admin_token"] = admin_token
@@ -401,7 +400,7 @@ class Deployer:
         project_id = terraform_output("infisical_project_id")
         if not project_id:
             log_info("Project may not exist yet, will be created")
-        
+
         # Step 4: Create Machine Identity using Terraform resources
         log_info("Creating Machine Identity via Terraform...")
         if not self.terraform_apply():
@@ -411,7 +410,7 @@ class Deployer:
         # Step 5: Verify credentials were created
         client_id = terraform_output("infisical_client_id")
         client_secret = terraform_output("infisical_client_secret")
-        
+
         if client_id and client_secret:
             log_info("Machine Identity created successfully!")
             # Credentials are automatically stored in Infisical by Terraform resources
@@ -432,7 +431,7 @@ class Deployer:
         if docker_host:
             infisical_port = read_tfvars("infisical_port") or "8080"
             infisical_url = f"http://{docker_host}:{infisical_port}"
-            
+
             log_info(f"Checking Infisical API at {infisical_url}...")
             client = InfisicalClient(docker_host, int(infisical_port))
             if not client.wait_for_api(max_retries=30):
@@ -474,13 +473,13 @@ class Deployer:
         current_token_id = read_tfvars("pm_api_token_id")
         current_token_secret = read_tfvars("pm_api_token_secret")
         pm_api_url = read_tfvars("pm_api_url")
-        
+
         # Always try to ensure token exists before Terraform uses it
         if proxmox_host and proxmox_ssh_user:
             log_step("Ensuring Proxmox token exists...")
             token_needs_creation = False
             token_needs_rotation = False
-            
+
             # Check if token is configured
             if not current_token_id or not current_token_secret:
                 log_info("No Proxmox token configured, will create one")
@@ -534,7 +533,7 @@ class Deployer:
                 except Exception as e:
                     log_warn(f"Could not verify token: {e}, will try to create if needed")
                     token_needs_creation = True
-            
+
             # Rotate token if secret is invalid
             if token_needs_rotation:
                 log_step("Rotating Proxmox token to get valid secret...")
@@ -582,7 +581,7 @@ class Deployer:
                 except Exception as e:
                     log_error(f"Could not rotate Proxmox token: {e}")
                     return False
-            
+
             # Create token if needed
             elif token_needs_creation:
                 log_step("Creating Proxmox token...")
@@ -700,7 +699,7 @@ class Deployer:
         # Get SSH users from config
         docker_ssh_user = read_tfvars("docker_ssh_user")
         proxmox_ssh_user = read_tfvars("proxmox_ssh_user")
-        
+
         if not docker_ssh_user:
             log_error("docker_ssh_user not set in terraform.tfvars")
             return False
@@ -737,8 +736,7 @@ class Deployer:
                 copy_ssh_key_to_container(proxmox_host, proxmox_ssh_user, container_id, public_key)
 
             # Brief wait for SSH (max 10 seconds)
-            import time
-            for i in range(5):
+            for _ in range(5):
                 if check_ssh(docker_host, docker_ssh_user):
                     break
                 time.sleep(2)
@@ -869,4 +867,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

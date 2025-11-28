@@ -47,10 +47,10 @@ def remove_token(proxmox_host: str, ssh_user: str, token_id: str) -> bool:
         if len(parts) != 2:
             log_error(f"Invalid token_id format: {token_id}")
             return False
-        
+
         pve_user = parts[0]
         token_name = parts[1]
-        
+
         cmd = [
             "ssh",
             "-o", "StrictHostKeyChecking=no",
@@ -75,7 +75,7 @@ def create_token(
 ) -> dict:
     """
     Create a new Proxmox API token.
-    
+
     Returns:
         dict with 'token_id' and 'token_secret' keys
     """
@@ -89,7 +89,7 @@ def create_token(
                 full_token_id = f"{pve_user}!{token_name}"
                 log_info(f"Rotating: removing old token: {full_token_id}")
                 remove_token(proxmox_host, ssh_user, full_token_id)
-    
+
     # Create new token (pveum will fail if token exists and we're not rotating)
     # --privsep=0 gives the token full privileges of the user (no separate ACLs needed)
     log_info(f"Creating Proxmox token: {pve_user}!{token_name}")
@@ -103,17 +103,17 @@ def create_token(
             f"pveum user token add {pve_user} {token_name} --privsep 0 --output-format json"
         ]
         result = run_cmd(cmd, capture=True, check=True)
-        
+
         # Parse JSON output
         output = json.loads(result.stdout)
         # pveum returns "full-tokenid" not "tokenid"
         token_id = output.get("full-tokenid", "") or output.get("tokenid", "")
         token_secret = output.get("value", "")
-        
+
         if not token_id or not token_secret:
             log_error(f"Failed to parse token output. Got: {result.stdout}")
             raise ValueError("Token creation failed: missing token_id or secret")
-        
+
         log_info(f"Token created successfully: {token_id}")
         return {
             "token_id": token_id,
@@ -127,7 +127,7 @@ def create_token(
                 # Recursively call with rotate=True
                 return create_token(proxmox_host, ssh_user, pve_user, token_name, rotate=True)
             else:
-                log_error(f"Failed to rotate token (may have been removed but creation failed)")
+                log_error("Failed to rotate token (may have been removed but creation failed)")
                 sys.exit(1)
         log_error(f"Failed to create token: {e}")
         if e.stdout:
@@ -146,29 +146,28 @@ def create_token(
 def main():
     """Main entry point."""
     import os
-    
+
     # Check if called from Terraform external data source (via environment variables)
     # Terraform passes query parameters as environment variables
     rotate_env = os.getenv("rotate", "false").lower() == "true"
-    
+
     if len(sys.argv) < 5:
         print(__doc__)
         sys.exit(1)
-    
+
     proxmox_host = sys.argv[1]
     ssh_user = sys.argv[2]
     pve_user = sys.argv[3]
     token_name = sys.argv[4]
     rotate = "--rotate" in sys.argv or rotate_env
-    
+
     # Create or rotate token
     # If token exists and we're not rotating, create_token will fail with clear error
     token_data = create_token(proxmox_host, ssh_user, pve_user, token_name, rotate)
-    
+
     # Output JSON for Terraform
     print(json.dumps(token_data))
 
 
 if __name__ == "__main__":
     main()
-

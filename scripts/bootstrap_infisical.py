@@ -34,7 +34,7 @@ def log_error(msg: str) -> None:
 def check_existing_bootstrap(base_url: str, email: str, password: str) -> dict | None:
     """Check if Infisical is already bootstrapped and try to get token."""
     log_info("Checking if Infisical is already bootstrapped...")
-    
+
     try:
         # Try to login with provided credentials
         resp = requests.post(
@@ -45,7 +45,7 @@ def check_existing_bootstrap(base_url: str, email: str, password: str) -> dict |
             },
             timeout=10
         )
-        
+
         if resp.status_code == 200:
             data = resp.json()
             token = data.get("token") or data.get("accessToken")
@@ -83,7 +83,7 @@ def check_existing_bootstrap(base_url: str, email: str, password: str) -> dict |
             log_info(f"Login failed: {resp.status_code} - not yet bootstrapped or wrong credentials")
     except RequestException as e:
         log_error(f"Check existing bootstrap failed: {e}")
-    
+
     return None
 
 
@@ -108,18 +108,18 @@ def bootstrap(base_url: str, email: str, password: str, org_name: str) -> dict |
             # Handle different response formats
             token = None
             org_id = None
-            
+
             # Try identity.credentials.token format
             if "identity" in data and "credentials" in data["identity"]:
                 token = data["identity"]["credentials"].get("token")
             # Try direct token format
             if not token:
                 token = data.get("token") or data.get("accessToken")
-            
+
             # Try organization.id format
             if "organization" in data:
                 org_id = data["organization"].get("id") or data["organization"].get("_id")
-            
+
             if token and org_id:
                 return {"token": token, "org_id": org_id}
             else:
@@ -157,7 +157,7 @@ def main():
     url_parts = url_clean.split(":")
     host = url_parts[0]
     port = int(url_parts[1]) if len(url_parts) > 1 else 8080
-    
+
     # Wait for API using InfisicalClient
     client = InfisicalClient(host, port)
     if not client.wait_for_api():
@@ -185,4 +185,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

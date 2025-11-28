@@ -59,4 +59,3 @@ class InfisicalClient:
             return None
         except RequestException:
             return None
-
