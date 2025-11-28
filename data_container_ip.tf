@@ -23,19 +23,14 @@ data "http" "container_interfaces" {
 }
 
 locals {
-  # Parse the API response to get eth0 IP
-  api_response = var.docker_network_ip == "dhcp" && length(data.http.container_interfaces) > 0 ? (
-    jsondecode(data.http.container_interfaces[0].response_body)
-  ) : { data = [] }
-
-  # Find eth0 interface and extract IPv4 address
-  eth0_inet = try(
-    [for iface in local.api_response.data : iface.inet if iface.name == "eth0"][0],
+  # Extract eth0 IP directly from API response using try() to handle all edge cases
+  container_ip_from_api = try(
+    split("/", [
+      for iface in jsondecode(data.http.container_interfaces[0].response_body).data : iface.inet
+      if iface.name == "eth0"
+    ][0])[0],
     ""
   )
-
-  # Extract the IP address (without CIDR notation)
-  container_ip_from_api = local.eth0_inet != "" ? split("/", local.eth0_inet)[0] : ""
 
   # Final docker_host_ip: use API result for DHCP, or configured value for static
   docker_host_ip = var.docker_network_ip == "dhcp" ? local.container_ip_from_api : (
