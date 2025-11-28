@@ -344,10 +344,7 @@ class Deployer:
                 return False
 
         # Wait for Infisical API to be ready
-        infisical_port = read_tfvars("infisical_port")
-        if not infisical_port:
-            log_error("infisical_port not set in terraform.tfvars")
-            return False
+        infisical_port = read_tfvars("infisical_port") or "8080"
         infisical_url = f"http://{docker_host}:{infisical_port}"
         log_info(f"Waiting for Infisical API at {infisical_url}...")
         
@@ -517,10 +514,7 @@ class Deployer:
 
         # Ensure Infisical is accessible before applying
         if docker_host:
-            infisical_port = read_tfvars("infisical_port")
-            if not infisical_port:
-                log_error("infisical_port not set in terraform.tfvars")
-                return False
+            infisical_port = read_tfvars("infisical_port") or "8080"
             infisical_url = f"http://{docker_host}:{infisical_port}"
             
             import time
@@ -916,9 +910,9 @@ class Deployer:
             )
 
         # 2. Cleanup Docker resources via SSH
-        docker_host = read_tfvars("docker_host_ip")
+        docker_host = terraform_output("docker_container_ip")
         docker_ssh_user = read_tfvars("docker_ssh_user")
-        if docker_host and docker_ssh_user and check_ssh(docker_host, docker_ssh_user):
+        if docker_host and docker_host != "dhcp" and docker_ssh_user and check_ssh(docker_host, docker_ssh_user):
             cleanup_docker_resources(docker_host, docker_ssh_user)
 
         # 3. Remove module.infisical from state
@@ -969,7 +963,7 @@ def main():
         "destroy": deployer.destroy,
         "phase1": deployer.phase1,
         "phase2": lambda: deployer.phase2(
-            read_tfvars("docker_host_ip") or "",
+            terraform_output("docker_container_ip") or "",
             read_tfvars("docker_ssh_user") or ""
         ),
     }

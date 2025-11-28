@@ -141,12 +141,6 @@ variable "docker_start_on_boot" {
   default     = true
 }
 
-variable "docker_host_ip" {
-  description = "IP address (optional, obtained from Proxmox API when using DHCP)"
-  type        = string
-  default     = ""
-}
-
 # =============================================================================
 # Infisical Configuration
 # =============================================================================

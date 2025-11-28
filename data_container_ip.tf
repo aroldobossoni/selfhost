@@ -32,9 +32,7 @@ locals {
     ""
   )
 
-  # Final docker_host_ip: use API result for DHCP, or configured value for static
-  docker_host_ip = var.docker_network_ip == "dhcp" ? local.container_ip_from_api : (
-    var.docker_host_ip != "" ? var.docker_host_ip : split("/", var.docker_network_ip)[0]
-  )
+  # Final docker_host_ip: use API result for DHCP, or extract from static IP config
+  docker_host_ip = var.docker_network_ip == "dhcp" ? local.container_ip_from_api : split("/", var.docker_network_ip)[0]
 }
 
