@@ -799,12 +799,6 @@ class Deployer:
         # 1. Remove Infisical provider resources from state (avoid auth errors)
         log_info("Removing Infisical resources from state...")
         infisical_resources = [
-            "module.infisical.infisical_secret.client_id[0]",
-            "module.infisical.infisical_secret.client_secret[0]",
-            "module.infisical.infisical_secret.postgres_password[0]",
-            "module.infisical.infisical_secret.encryption_key[0]",
-            "module.infisical.infisical_secret.jwt_signing_key[0]",
-            "module.infisical.infisical_secret.admin_password[0]",
             "module.infisical.infisical_project_environment.production[0]",
             "module.infisical.infisical_project.main[0]",
             "module.infisical.infisical_identity_universal_auth_client_secret.terraform_controller[0]",

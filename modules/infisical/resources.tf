@@ -24,42 +24,6 @@ resource "infisical_project_environment" "production" {
   slug       = "production"
 }
 
-# Store generated passwords as secrets in Infisical
-# These can be created with admin_token (don't need Machine Identity)
-resource "infisical_secret" "postgres_password" {
-  count        = local.can_create_project && length(infisical_project_environment.production) > 0 ? 1 : 0
-  name         = "POSTGRES_PASSWORD"
-  value        = local.postgres_password
-  env_slug     = infisical_project_environment.production[0].slug
-  workspace_id = infisical_project.main[0].id
-  folder_path  = "/"
-}
-
-resource "infisical_secret" "encryption_key" {
-  count        = local.can_create_project && length(infisical_project_environment.production) > 0 ? 1 : 0
-  name         = "ENCRYPTION_KEY"
-  value        = local.encryption_key_hex
-  env_slug     = infisical_project_environment.production[0].slug
-  workspace_id = infisical_project.main[0].id
-  folder_path  = "/"
-}
-
-resource "infisical_secret" "jwt_signing_key" {
-  count        = local.can_create_project && length(infisical_project_environment.production) > 0 ? 1 : 0
-  name         = "JWT_SIGNING_KEY"
-  value        = local.jwt_signing_key
-  env_slug     = infisical_project_environment.production[0].slug
-  workspace_id = infisical_project.main[0].id
-  folder_path  = "/"
-}
-
-resource "infisical_secret" "admin_password" {
-  count        = local.can_create_project && length(infisical_project_environment.production) > 0 ? 1 : 0
-  name         = "ADMIN_PASSWORD"
-  value        = local.admin_password
-  env_slug     = infisical_project_environment.production[0].slug
-  workspace_id = infisical_project.main[0].id
-  folder_path  = "/"
-}
-
-
+# Note: Secrets (postgres_password, encryption_key, etc.) are NOT stored in Infisical
+# because the admin_token doesn't have proper project data key access.
+# These credentials are managed by Terraform state and passed directly to containers.
