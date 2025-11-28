@@ -40,6 +40,7 @@ output "infisical_container_id" {
 output "infisical_bootstrap_complete" {
   description = "Whether Infisical bootstrap is complete"
   value       = module.infisical.bootstrap_complete
+  sensitive   = true
 }
 
 output "infisical_admin_password" {

@@ -31,3 +31,4 @@ locals {
   jwt_signing_key    = var.enabled && length(random_password.jwt_signing_key) > 0 ? random_password.jwt_signing_key[0].result : ""
 }
 
+

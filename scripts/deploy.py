@@ -15,6 +15,7 @@ Usage:
 import sys
 import os
 import shutil
+import time
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -109,12 +110,34 @@ def check_dependencies(auto_install: bool = True) -> bool:
     return True
 
 
+def rotate_tfstate_backups(project_root: Path, max_backups: int = 3) -> None:
+    """Rotate terraform.tfstate backups, keeping only the last N."""
+    backup_dir = project_root / "tfstate.backup"
+    backup_dir.mkdir(exist_ok=True)
+
+    # Move any .backup files from root to backup dir
+    for backup_file in project_root.glob("terraform.tfstate.*.backup"):
+        dest = backup_dir / backup_file.name
+        shutil.move(str(backup_file), str(dest))
+        log_info(f"Moved {backup_file.name} to tfstate.backup/")
+
+    # Get all backups sorted by modification time (oldest first)
+    backups = sorted(backup_dir.glob("terraform.tfstate.*.backup"), key=lambda f: f.stat().st_mtime)
+
+    # Remove oldest backups if we have more than max_backups
+    while len(backups) > max_backups:
+        oldest = backups.pop(0)
+        oldest.unlink()
+        log_info(f"Removed old backup: {oldest.name}")
+
+
 class Deployer:
     """Manages the deployment lifecycle."""
 
     def __init__(self):
         self.project_root = get_project_root()
         self.credentials_file = self.project_root / "infisical_token.auto.tfvars"
+        self.backup_dir = self.project_root / "tfstate.backup"
 
     def check_tools(self) -> bool:
         """Check if required tools are installed."""
@@ -402,6 +425,9 @@ class Deployer:
         print("  Selfhost Intelligent Deploy")
         print("=" * 50 + "\n")
 
+        # Rotate tfstate backups (keep last 3)
+        rotate_tfstate_backups(self.project_root, max_backups=3)
+
         # Check tools
         if not self.check_tools():
             return False
@@ -514,7 +540,7 @@ class Deployer:
             "infisical_secret.encryption_key[0]",
             "infisical_secret.jwt_signing_key[0]",
             "infisical_secret.admin_password[0]",
-            "infisical_project_environment.development[0]",
+            "infisical_project_environment.production[0]",
             "infisical_project.selfhost[0]",
             "infisical_identity_universal_auth_client_secret.terraform_controller[0]",
             "infisical_identity_universal_auth.terraform_controller[0]",

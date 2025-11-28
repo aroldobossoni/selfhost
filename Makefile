@@ -76,7 +76,8 @@ clean:
 	rm -rf $(VENV)
 	rm -rf __pycache__ scripts/__pycache__
 	rm -f .terraform.lock.hcl
-	rm -f tfplan *.backup
+	rm -f tfplan
 	rm -f *.auto.tfvars
+	rm -rf tfstate.backup
 	@echo "==> Cleaned"
 
