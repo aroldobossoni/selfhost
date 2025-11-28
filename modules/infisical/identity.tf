@@ -42,36 +42,7 @@ resource "infisical_identity_universal_auth_client_secret" "terraform_controller
   depends_on = [infisical_identity_universal_auth.terraform_controller]
 }
 
-# Store Machine Identity credentials in Infisical (after project/environment exist)
-# This creates a circular dependency, so we store AFTER project is created
-resource "infisical_secret" "client_id" {
-  count = var.enabled && local.bootstrap_complete && length(infisical_project_environment.production) > 0 ? 1 : 0
-
-  name         = "INFISICAL_CLIENT_ID"
-  value        = infisical_identity_universal_auth_client_secret.terraform_controller[0].client_id
-  env_slug     = infisical_project_environment.production[0].slug
-  workspace_id = infisical_project.main[0].id
-  folder_path  = "/"
-
-  depends_on = [
-    infisical_identity_universal_auth_client_secret.terraform_controller,
-    infisical_project_environment.production
-  ]
-}
-
-resource "infisical_secret" "client_secret" {
-  count = var.enabled && local.bootstrap_complete && length(infisical_project_environment.production) > 0 ? 1 : 0
-
-  name         = "INFISICAL_CLIENT_SECRET"
-  value        = infisical_identity_universal_auth_client_secret.terraform_controller[0].client_secret
-  env_slug     = infisical_project_environment.production[0].slug
-  workspace_id = infisical_project.main[0].id
-  folder_path  = "/"
-
-  depends_on = [
-    infisical_identity_universal_auth_client_secret.terraform_controller,
-    infisical_project_environment.production
-  ]
-}
-
+# Note: Machine Identity credentials (client_id, client_secret) are NOT stored in Infisical
+# because the admin_token doesn't have proper project data key access.
+# These are available via Terraform outputs: infisical_client_id, infisical_client_secret
 
