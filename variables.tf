@@ -163,15 +163,8 @@ variable "infisical_project_name" {
   default     = "selfhost"
 }
 
-variable "infisical_admin_email" {
-  description = "Infisical admin email (used by bootstrap script)"
-  type        = string
-}
-
-variable "infisical_org_name" {
-  description = "Infisical organization name (used by bootstrap script)"
-  type        = string
-}
+# Note: infisical_admin_email and infisical_org_name are in terraform.tfvars
+# but not declared here because they're only used by Python scripts (read_tfvars)
 
 # Bootstrap outputs (from TF_VAR_* environment variables set by deploy.py)
 variable "infisical_admin_token" {
