@@ -171,14 +171,20 @@ class Deployer:
     def terraform_apply(
         self,
         target: str = None,
+        targets: list = None,
         auto_approve: bool = True,
         refresh: bool = True
     ) -> bool:
         """Run terraform apply."""
         cmd = ["terraform", "apply"]
 
-        if target:
+        # Support single target or multiple targets
+        if targets:
+            for t in targets:
+                cmd.extend(["-target", t])
+        elif target:
             cmd.extend(["-target", target])
+
         if auto_approve:
             cmd.append("-auto-approve")
         if not refresh:
@@ -253,10 +259,12 @@ class Deployer:
     # =========================================================================
 
     def phase1(self) -> bool:
-        """Phase 1: Deploy LXC container with Docker."""
+        """Phase 1: Deploy LXC container with Docker and get IP from Proxmox API."""
         log_step("Phase 1: Deploying Docker LXC...")
 
-        if not self.terraform_apply(target="module.docker_lxc"):
+        # Apply LXC module and data source for container IP
+        targets = ["module.docker_lxc", "data.http.container_interfaces"]
+        if not self.terraform_apply(targets=targets):
             return False
 
         log_info("Phase 1 complete!")
