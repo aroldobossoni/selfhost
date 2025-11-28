@@ -13,6 +13,12 @@ output "docker_container_ip" {
   value       = local.docker_host_ip
 }
 
+output "docker_lxc_password" {
+  description = "Auto-generated password for Docker LXC container"
+  value       = local.docker_lxc_password
+  sensitive   = true
+}
+
 output "infisical_url" {
   description = "Infisical web UI URL"
   value       = module.infisical.infisical_url

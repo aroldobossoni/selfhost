@@ -8,7 +8,7 @@ module "docker_lxc" {
   ostemplate        = var.docker_ostemplate
   ostemplate_name   = var.docker_ostemplate_name
   template_storage  = var.docker_template_storage
-  password          = var.docker_password
+  password          = local.docker_lxc_password
   cores             = var.docker_cores
   memory            = var.docker_memory
   swap              = var.docker_swap

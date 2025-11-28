@@ -22,12 +22,6 @@ variable "docker_template_storage" {
   default     = "local"
 }
 
-variable "docker_password" {
-  description = "Root password for Docker container (minimum 5 characters)"
-  type        = string
-  sensitive   = true
-}
-
 variable "docker_cores" {
   description = "Number of CPU cores for Docker container"
   type        = number
