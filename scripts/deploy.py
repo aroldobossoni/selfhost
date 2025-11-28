@@ -441,6 +441,18 @@ class Deployer:
         # Re-init to pick up any provider changes
         self.terraform_init(upgrade=True)
 
+        # Remove stale Infisical resources from state (they may have wrong permissions)
+        # This prevents 403 errors when admin_token changed
+        stale_resources = [
+            "module.infisical.infisical_project.main[0]",
+            "module.infisical.infisical_project_environment.production[0]",
+            "module.infisical.infisical_identity.terraform_controller[0]",
+            "module.infisical.infisical_identity_universal_auth.terraform_controller[0]",
+            "module.infisical.infisical_identity_universal_auth_client_secret.terraform_controller[0]",
+        ]
+        for resource in stale_resources:
+            run_cmd(["terraform", "state", "rm", resource], cwd=str(self.project_root), check=False)
+
         # Full apply
         if not self.terraform_apply():
             return False
