@@ -1,36 +1,4 @@
-variable "pm_api_url" {
-  description = "Proxmox API URL (e.g., https://192.168.3.2:8006/api2/json)"
-  type        = string
-}
-
-variable "pm_api_token_id" {
-  description = "Proxmox API Token ID (e.g., user@pam!token-name)"
-  type        = string
-  sensitive   = true
-}
-
-variable "pm_api_token_secret" {
-  description = "Proxmox API Token Secret"
-  type        = string
-  sensitive   = true
-}
-
-variable "pm_tls_insecure" {
-  description = "Allow insecure TLS connections to Proxmox API"
-  type        = bool
-  default     = true
-}
-
-variable "pm_node" {
-  description = "Proxmox node name"
-  type        = string
-}
-
-variable "pm_host" {
-  description = "Proxmox host IP or hostname for SSH connections"
-  type        = string
-}
-
+# Proxmox provider
 provider "proxmox" {
   pm_api_url          = var.pm_api_url
   pm_api_token_id     = var.pm_api_token_id
@@ -39,14 +7,22 @@ provider "proxmox" {
 }
 
 # Docker provider for Infisical module
-# Only used when enable_infisical = true
 provider "docker" {
   alias = "infisical"
   host  = "ssh://${var.docker_ssh_user}@${local.docker_host_ip}"
 }
 
-# Infisical provider for managing secrets
-# This provider is only loaded when infisical_token is available
-# See infisical_provider.tf for the actual provider definition
-# (moved to separate file to allow conditional loading)
+# Infisical provider
+# Uses Universal Auth when available, otherwise uses admin token
+provider "infisical" {
+  host = "http://${local.docker_host_ip}:${var.infisical_port}"
 
+  auth = {
+    universal = var.infisical_client_id != "" ? {
+      client_id     = var.infisical_client_id
+      client_secret = var.infisical_client_secret
+    } : null
+
+    token = var.infisical_client_id == "" ? coalesce(var.infisical_admin_token, "not-yet-bootstrapped") : null
+  }
+}

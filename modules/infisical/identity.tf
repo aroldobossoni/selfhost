@@ -1,56 +1,52 @@
 # Infisical Machine Identity Configuration
-# Uses Terraform provider resources instead of Python scripts
-# Requires: infisical_admin_token and infisical_org_id from bootstrap
+# Creates Machine Identity with Universal Auth for Terraform automation
 
 locals {
   # Bootstrap completed when we have admin token and org_id
-  bootstrap_complete = var.infisical_admin_token != "" && var.infisical_org_id != ""
+  bootstrap_complete = var.admin_token != "" && var.org_id != ""
 }
 
 # Create Machine Identity for Terraform automation
 resource "infisical_identity" "terraform_controller" {
-  count = var.enable_infisical && local.bootstrap_complete ? 1 : 0
+  count = var.enabled && local.bootstrap_complete ? 1 : 0
 
-  name = "Terraform-Controller"
-  role = "admin"
-
-  org_id = var.infisical_org_id
+  name   = "Terraform-Controller"
+  role   = "admin"
+  org_id = var.org_id
 }
 
 # Attach Universal Auth to the Machine Identity
 resource "infisical_identity_universal_auth" "terraform_controller" {
-  count = var.enable_infisical && local.bootstrap_complete ? 1 : 0
+  count = var.enabled && local.bootstrap_complete ? 1 : 0
 
   identity_id = infisical_identity.terraform_controller[0].id
 
-  # Allow access from any IP
   client_secret_trusted_ips = [
     {
       ip_address = "0.0.0.0/0"
     }
   ]
 
-  access_token_ttl           = 7200
-  access_token_max_ttl       = 7200
+  access_token_ttl            = 7200
+  access_token_max_ttl        = 7200
   access_token_num_uses_limit = 0
 }
 
 # Create Client Secret for authentication
 resource "infisical_identity_universal_auth_client_secret" "terraform_controller" {
-  count = var.enable_infisical && local.bootstrap_complete ? 1 : 0
+  count = var.enabled && local.bootstrap_complete ? 1 : 0
 
   identity_id = infisical_identity.terraform_controller[0].id
   description = "Terraform Controller Client Secret"
 
-  # Must wait for Universal Auth to be attached first
   depends_on = [infisical_identity_universal_auth.terraform_controller]
 }
 
 # Save credentials to file for subsequent runs
-resource "local_file" "infisical_credentials" {
-  count = var.enable_infisical && local.bootstrap_complete ? 1 : 0
+resource "local_file" "credentials" {
+  count = var.enabled && local.bootstrap_complete ? 1 : 0
 
-  filename        = "${path.module}/infisical_token.auto.tfvars"
+  filename        = "${path.root}/infisical_token.auto.tfvars"
   file_permission = "0600"
 
   content = <<-EOT
@@ -62,18 +58,5 @@ resource "local_file" "infisical_credentials" {
   depends_on = [
     infisical_identity_universal_auth_client_secret.terraform_controller
   ]
-}
-
-# Output for verification
-output "infisical_identity_id" {
-  description = "Infisical Machine Identity ID"
-  value       = var.enable_infisical && local.bootstrap_complete ? infisical_identity.terraform_controller[0].id : ""
-  sensitive   = true
-}
-
-output "infisical_bootstrap_complete" {
-  description = "Whether Infisical bootstrap is complete"
-  value       = local.bootstrap_complete
-  sensitive   = true
 }
 

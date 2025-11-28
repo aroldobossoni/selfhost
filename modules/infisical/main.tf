@@ -1,11 +1,3 @@
-# Local values for derived names
-locals {
-  postgres_container_name  = "${var.network_name}-postgres"
-  redis_container_name     = "${var.network_name}-redis"
-  infisical_container_name = var.network_name
-  server_url               = var.server_url
-}
-
 # Docker network for Infisical stack
 resource "docker_network" "infisical" {
   count = var.enabled ? 1 : 0
@@ -15,8 +7,6 @@ resource "docker_network" "infisical" {
     subnet = var.network_subnet
   }
 
-  # Force removal even if containers are still connected
-  # This helps with cleanup when containers fail to stop properly
   lifecycle {
     create_before_destroy = true
   }
@@ -37,15 +27,12 @@ resource "docker_volume" "redis_data" {
 # PostgreSQL container
 resource "docker_container" "postgres" {
   count = var.enabled ? 1 : 0
-  name  = local.postgres_container_name
+  name  = "${var.network_name}-postgres"
   image = var.postgres_image
-
-  # Memory limits removed due to Docker-in-LXC cgroup issues
-  # The parent LXC container already enforces memory limits
 
   env = [
     "POSTGRES_USER=${var.postgres_user}",
-    "POSTGRES_PASSWORD=${var.postgres_password}",
+    "POSTGRES_PASSWORD=${local.postgres_password}",
     "POSTGRES_DB=${var.postgres_db}"
   ]
 
@@ -72,10 +59,8 @@ resource "docker_container" "postgres" {
 # Redis container
 resource "docker_container" "redis" {
   count = var.enabled ? 1 : 0
-  name  = local.redis_container_name
+  name  = "${var.network_name}-redis"
   image = var.redis_image
-
-  # Memory limits removed due to Docker-in-LXC cgroup issues
 
   command = [
     "redis-server",
@@ -98,21 +83,19 @@ resource "docker_container" "redis" {
 # Infisical container
 resource "docker_container" "infisical" {
   count = var.enabled ? 1 : 0
-  name  = local.infisical_container_name
+  name  = var.network_name
   image = var.infisical_image
-
-  # Memory limits removed due to Docker-in-LXC cgroup issues
 
   env = [
     "NODE_OPTIONS=--max-old-space-size=1024",
-    "DB_CONNECTION_URI=postgresql://${var.postgres_user}:${var.postgres_password}@${local.postgres_container_name}:5432/${var.postgres_db}",
-    "DB_ENCRYPTION_KEY=${var.infisical_db_password}",
-    "ENCRYPTION_KEY=${var.infisical_encryption_key}",
-    "JWT_SIGNUP_SECRET=${var.infisical_jwt_signing_key}",
-    "JWT_REFRESH_SECRET=${var.infisical_jwt_signing_key}",
-    "JWT_AUTH_SECRET=${var.infisical_jwt_signing_key}",
-    "REDIS_URL=redis://${local.redis_container_name}:6379",
-    "SERVER_URL=${local.server_url}"
+    "DB_CONNECTION_URI=postgresql://${var.postgres_user}:${local.postgres_password}@${var.network_name}-postgres:5432/${var.postgres_db}",
+    "DB_ENCRYPTION_KEY=${local.postgres_password}",
+    "ENCRYPTION_KEY=${local.encryption_key_hex}",
+    "JWT_SIGNUP_SECRET=${local.jwt_signing_key}",
+    "JWT_REFRESH_SECRET=${local.jwt_signing_key}",
+    "JWT_AUTH_SECRET=${local.jwt_signing_key}",
+    "REDIS_URL=redis://${var.network_name}-redis:6379",
+    "SERVER_URL=${var.server_url}"
   ]
 
   ports {

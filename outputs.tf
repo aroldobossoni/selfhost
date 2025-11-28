@@ -1,3 +1,7 @@
+# =============================================================================
+# Docker LXC Outputs
+# =============================================================================
+
 output "docker_container_id" {
   description = "ID of the Docker LXC container"
   value       = module.docker_lxc.container_id
@@ -19,6 +23,10 @@ output "docker_lxc_password" {
   sensitive   = true
 }
 
+# =============================================================================
+# Infisical Outputs
+# =============================================================================
+
 output "infisical_url" {
   description = "Infisical web UI URL"
   value       = module.infisical.infisical_url
@@ -29,25 +37,13 @@ output "infisical_container_id" {
   value       = module.infisical.infisical_container_id
 }
 
-output "infisical_project_name" {
-  description = "Infisical project name (for reference)"
-  value       = var.infisical_project_name
+output "infisical_bootstrap_complete" {
+  description = "Whether Infisical bootstrap is complete"
+  value       = module.infisical.bootstrap_complete
 }
 
-output "infisical_token_available" {
-  description = "Whether Infisical token is available (for reference)"
-  value       = var.infisical_token != ""
-  sensitive   = true
-}
-
-output "infisical_client_id_set" {
-  description = "Whether Infisical Client ID is set"
-  value       = var.infisical_client_id != ""
-  sensitive   = true
-}
-
-output "infisical_client_secret_set" {
-  description = "Whether Infisical Client Secret is set"
-  value       = var.infisical_client_secret != ""
+output "infisical_admin_password" {
+  description = "Infisical admin password"
+  value       = module.infisical.admin_password
   sensitive   = true
 }
