@@ -1,6 +1,6 @@
 # Proxmox Token Management
 # Token is created/rotated by deploy.py before Terraform runs
-# This file only handles cleanup on destroy and storing in Infisical
+# This file only handles cleanup on destroy
 
 locals {
   # Token cleanup only needs SSH access to Proxmox
