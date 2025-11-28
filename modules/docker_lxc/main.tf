@@ -1,8 +1,18 @@
 # Download template if not exists
 resource "null_resource" "download_template" {
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "${path.root}/scripts/download_template.sh '${var.proxmox_ssh_user}' '${var.proxmox_host}' '${var.template_storage}' '${var.ostemplate_name}'"
+    command = <<-EOT
+      PYTHON_CMD="python3"
+      if [ -f "${path.root}/.venv/bin/python3" ]; then
+        PYTHON_CMD="${path.root}/.venv/bin/python3"
+      fi
+      
+      $PYTHON_CMD ${path.root}/scripts/proxmox_utils.py download_template \
+        "${var.proxmox_host}" \
+        "${var.proxmox_ssh_user}" \
+        "${var.template_storage}" \
+        "${var.ostemplate_name}"
+    EOT
   }
 
   triggers = {
@@ -45,13 +55,23 @@ resource "null_resource" "docker_install" {
   depends_on = [proxmox_lxc.docker]
 
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "${path.root}/scripts/install_docker.sh '${var.proxmox_ssh_user}' '${var.proxmox_host}' '${proxmox_lxc.docker.vmid}' '${var.install_compose}'"
+    command = <<-EOT
+      PYTHON_CMD="python3"
+      if [ -f "${path.root}/.venv/bin/python3" ]; then
+        PYTHON_CMD="${path.root}/.venv/bin/python3"
+      fi
+      
+      $PYTHON_CMD ${path.root}/scripts/proxmox_utils.py install_docker \
+        "${var.proxmox_host}" \
+        "${var.proxmox_ssh_user}" \
+        "${proxmox_lxc.docker.vmid}" \
+        "${var.install_compose}"
+    EOT
   }
 
   triggers = {
     container_id  = proxmox_lxc.docker.vmid
-    script_hash   = filemd5("${path.root}/scripts/install_docker.sh")
+    script_hash   = filemd5("${path.root}/scripts/proxmox_utils.py")
     install_compose = var.install_compose
   }
 }

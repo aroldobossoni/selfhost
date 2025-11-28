@@ -4,7 +4,7 @@ from .utils import log_info, log_warn, log_step, run_cmd
 
 
 def cleanup_docker_resources(host: str, user: str, network_name: str = "infisical") -> bool:
-    """Clean up Docker containers and networks via SSH."""
+    """Clean up Docker containers, volumes, and networks via SSH."""
     log_step("Cleaning up Docker resources...")
 
     cleanup_script = f'''
@@ -19,6 +19,12 @@ def cleanup_docker_resources(host: str, user: str, network_name: str = "infisica
             done
         fi
 
+        # Also stop/remove known infisical containers by name
+        for container in infisical infisical-postgres infisical-redis; do
+            docker stop "$container" 2>/dev/null || true
+            docker rm -f "$container" 2>/dev/null || true
+        done
+
         # Force disconnect all containers from network
         docker network inspect {network_name} --format '{{{{range $key, $value := .Containers}}}}{{{{println $key}}}}{{{{end}}}}' 2>/dev/null | while read container_id; do
             if [ -n "$container_id" ]; then
@@ -28,6 +34,12 @@ def cleanup_docker_resources(host: str, user: str, network_name: str = "infisica
 
         # Force remove network if it exists
         docker network rm {network_name} 2>/dev/null || true
+
+        # Remove volumes (important: this deletes all data!)
+        for volume in {network_name}_postgres_data {network_name}_redis_data; do
+            docker volume rm "$volume" 2>/dev/null || true
+        done
+        echo "Docker cleanup completed (containers, network, volumes)"
     '''
 
     try:

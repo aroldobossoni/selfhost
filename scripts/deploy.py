@@ -237,29 +237,63 @@ class Deployer:
             return False
 
     def has_credentials(self) -> bool:
-        """Check if Infisical credentials exist."""
-        if not self.credentials_file.exists():
-            return False
-
-        with open(self.credentials_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        return (
-            "infisical_client_id" in content and
-            "infisical_client_secret" in content and
-            '""' not in content  # Not empty values
-        )
+        """Check if Infisical credentials exist (in Infisical, state, or environment)."""
+        # Check environment variables first
+        import os
+        if os.getenv("TF_VAR_infisical_client_id") and os.getenv("TF_VAR_infisical_client_secret"):
+            return True
+        
+        # Check Terraform outputs
+        client_id = terraform_output("infisical_client_id")
+        client_secret = terraform_output("infisical_client_secret")
+        if client_id and client_secret:
+            return True
+        
+        # Try to get from Infisical if available
+        docker_host = terraform_output("docker_container_ip")
+        infisical_port = read_tfvars("infisical_port") or "8080"
+        project_id = terraform_output("infisical_project_id")
+        admin_token = os.getenv("TF_VAR_infisical_admin_token")
+        
+        if docker_host and docker_host != "dhcp" and project_id and admin_token:
+            try:
+                client = InfisicalClient(docker_host, int(infisical_port))
+                client_id = client.get_secret(project_id, "production", "INFISICAL_CLIENT_ID", admin_token)
+                client_secret = client.get_secret(project_id, "production", "INFISICAL_CLIENT_SECRET", admin_token)
+                if client_id and client_secret:
+                    log_info("Found credentials in Infisical")
+                    # Export for Terraform
+                    os.environ["TF_VAR_infisical_client_id"] = client_id
+                    os.environ["TF_VAR_infisical_client_secret"] = client_secret
+                    return True
+            except Exception as e:
+                log_warn(f"Could not check Infisical for credentials: {e}")
+        
+        # Fallback: check files (for migration period)
+        if self.credentials_file.exists():
+            with open(self.credentials_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            if "infisical_client_id" in content and "infisical_client_secret" in content and '""' not in content:
+                return True
+        
+        return False
 
     def has_bootstrap_token(self) -> bool:
-        """Check if bootstrap token exists."""
+        """Check if bootstrap token exists (in environment or Infisical)."""
+        # Check environment variables first
+        import os
+        if os.getenv("TF_VAR_infisical_admin_token") and os.getenv("TF_VAR_infisical_org_id"):
+            return True
+        
+        # Fallback: check files (for migration period)
         bootstrap_file = self.project_root / "infisical_bootstrap.auto.tfvars"
-        if not bootstrap_file.exists():
-            return False
-
-        with open(bootstrap_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        return "infisical_admin_token" in content and '""' not in content
+        if bootstrap_file.exists():
+            with open(bootstrap_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            if "infisical_admin_token" in content and '""' not in content:
+                return True
+        
+        return False
 
     def save_credentials(self, client_id: str, client_secret: str, token: str = "") -> None:
         """Save Infisical credentials to auto.tfvars file."""
@@ -335,39 +369,139 @@ class Deployer:
         log_info("Phase 2 complete!")
         return True
 
+    def get_credentials_from_infisical(self, docker_host: str, infisical_port: str, project_id: str, env_slug: str = "production") -> dict | None:
+        """Try to get credentials from Infisical if they exist."""
+        try:
+            client = InfisicalClient(docker_host, int(infisical_port))
+            
+            # Try to get client_id and client_secret from Infisical
+            # First, we need to authenticate - try with admin token if available
+            import os
+            admin_token = os.getenv("TF_VAR_infisical_admin_token")
+            if not admin_token:
+                return None
+            
+            # Get secrets from Infisical
+            client_id = client.get_secret(project_id, env_slug, "INFISICAL_CLIENT_ID", admin_token)
+            client_secret = client.get_secret(project_id, env_slug, "INFISICAL_CLIENT_SECRET", admin_token)
+            
+            if client_id and client_secret:
+                log_info("Found existing credentials in Infisical")
+                return {
+                    "client_id": client_id,
+                    "client_secret": client_secret
+                }
+        except Exception as e:
+            log_warn(f"Could not retrieve credentials from Infisical: {e}")
+        
+        return None
+
     def bootstrap(self) -> bool:
         """Phase 3: Bootstrap Infisical and create Machine Identity."""
         log_step("Phase 3: Bootstrap Infisical...")
 
-        if self.has_credentials():
-            log_info("Credentials already exist, skipping bootstrap")
-            return True
+        # Get Infisical connection info
+        docker_host = terraform_output("docker_container_ip")
+        if not docker_host or docker_host == "dhcp":
+            log_error("Could not get Docker host IP")
+            return False
+        
+        infisical_port = read_tfvars("infisical_port") or "8080"
+        infisical_url = f"http://{docker_host}:{infisical_port}"
+        
+        admin_email = read_tfvars("infisical_admin_email")
+        org_name = read_tfvars("infisical_org_name")
+        admin_password = terraform_output("infisical_admin_password")
+        project_name = read_tfvars("infisical_project_name") or "selfhost"
+        
+        if not admin_email or not org_name:
+            log_error("infisical_admin_email and infisical_org_name must be set")
+            return False
+        
+        if not admin_password:
+            log_error("Could not get admin password from Terraform state")
+            return False
 
-        # Step 1: Run Python bootstrap script (creates admin/org, saves token)
-        if not self.has_bootstrap_token():
+        # Step 1: Check if bootstrap token exists (environment or Infisical)
+        import os
+        admin_token = os.getenv("TF_VAR_infisical_admin_token")
+        org_id = os.getenv("TF_VAR_infisical_org_id")
+        
+        if not admin_token or not org_id:
             log_info("Running bootstrap script (creates admin user and org)...")
-            if not self.terraform_apply(target="null_resource.bootstrap_infisical"):
-                log_error("Bootstrap script failed")
+            try:
+                result = run_cmd(
+                    [
+                        sys.executable,
+                        str(self.project_root / "scripts" / "bootstrap_infisical.py"),
+                        infisical_url,
+                        admin_email,
+                        admin_password,
+                        org_name,
+                        "--check-existing"
+                    ],
+                    capture=True,
+                    check=False
+                )
+                
+                if result.returncode == 0:
+                    # Parse JSON from stdout (logs go to stderr)
+                    json_line = None
+                    for line in result.stdout.strip().split('\n'):
+                        if line.strip().startswith('{'):
+                            json_line = line.strip()
+                    
+                    if json_line:
+                        bootstrap_data = json.loads(json_line)
+                        admin_token = bootstrap_data.get("token")
+                        org_id = bootstrap_data.get("org_id")
+                        
+                        if admin_token and org_id:
+                            # Export as environment variables for Terraform
+                            os.environ["TF_VAR_infisical_admin_token"] = admin_token
+                            os.environ["TF_VAR_infisical_org_id"] = org_id
+                            log_info("Bootstrap token captured and exported")
+                        else:
+                            log_error("Bootstrap returned invalid data")
+                            return False
+                    else:
+                        log_error("No JSON found in bootstrap output")
+                        log_error(f"Output: {result.stdout}")
+                        return False
+                else:
+                    log_error(f"Bootstrap script failed: {result.stdout}")
+                    if result.stderr:
+                        log_error(f"Error: {result.stderr}")
+                    return False
+            except Exception as e:
+                log_error(f"Failed to run bootstrap script: {e}")
                 return False
+        else:
+            log_info("Bootstrap token already available in environment")
 
-            if not self.has_bootstrap_token():
-                log_error("Bootstrap completed but no token file found")
-                return False
-
-            log_info("Bootstrap token created!")
-
-        # Step 2: Re-init to pick up new variables from auto.tfvars
+        # Step 2: Re-init to pick up new variables
         log_info("Re-initializing Terraform with bootstrap token...")
         self.terraform_init(upgrade=True)
 
-        # Step 3: Create Machine Identity using Terraform resources
+        # Step 3: Check if Machine Identity already exists in Infisical
+        # Get project ID first (may need to create it)
+        project_id = terraform_output("infisical_project_id")
+        if not project_id:
+            log_info("Project may not exist yet, will be created")
+        
+        # Step 4: Create Machine Identity using Terraform resources
         log_info("Creating Machine Identity via Terraform...")
         if not self.terraform_apply():
             log_error("Failed to create Machine Identity")
             return False
 
-        if self.has_credentials():
+        # Step 5: Verify credentials were created
+        client_id = terraform_output("infisical_client_id")
+        client_secret = terraform_output("infisical_client_secret")
+        
+        if client_id and client_secret:
             log_info("Machine Identity created successfully!")
+            # Credentials are automatically stored in Infisical by Terraform resources
             return True
 
         log_warn("Machine Identity creation may require another apply")
@@ -451,9 +585,11 @@ class Deployer:
             if not current_token_id or not current_token_secret:
                 log_info("No Proxmox token configured, will create one")
                 token_needs_creation = True
+                token_needs_rotation = False
             else:
-                # Token configured, verify it exists on Proxmox
+                # Token configured, verify it exists on Proxmox AND validate secret
                 log_info(f"Verifying Proxmox token: {current_token_id}")
+                token_needs_rotation = False
                 try:
                     # Try to list tokens to verify it exists
                     result = run_cmd(
@@ -472,7 +608,37 @@ class Deployer:
                             log_warn(f"Token {current_token_id} not found on Proxmox, will create new one")
                             token_needs_creation = True
                         else:
-                            log_info("Proxmox token verified")
+                            # Token exists, but we can't verify secret via SSH
+                            # Try a quick API call to validate the secret
+                            log_info("Token exists, validating secret via API...")
+                            import urllib.request
+                            import ssl
+                            try:
+                                # Create SSL context that ignores certificate errors
+                                ctx = ssl.create_default_context()
+                                ctx.check_hostname = False
+                                ctx.verify_mode = ssl.CERT_NONE
+                                
+                                req = urllib.request.Request(
+                                    f"{pm_api_url}/version",
+                                    headers={"Authorization": f"PVEAPIToken={current_token_id}={current_token_secret}"}
+                                )
+                                with urllib.request.urlopen(req, timeout=5, context=ctx) as resp:
+                                    if resp.status == 200:
+                                        log_info("Proxmox token validated successfully")
+                                    else:
+                                        log_warn(f"Token validation returned status {resp.status}, will rotate")
+                                        token_needs_rotation = True
+                            except urllib.error.HTTPError as e:
+                                if e.code == 401:
+                                    log_warn("Token secret is invalid, will rotate to get new secret")
+                                    token_needs_rotation = True
+                                else:
+                                    log_warn(f"API validation failed ({e.code}), will rotate to be safe")
+                                    token_needs_rotation = True
+                            except Exception as e:
+                                log_warn(f"Could not validate token via API: {e}, will rotate to be safe")
+                                token_needs_rotation = True
                     else:
                         log_warn("Could not verify token, will try to create if needed")
                         token_needs_creation = True
@@ -480,8 +646,56 @@ class Deployer:
                     log_warn(f"Could not verify token: {e}, will try to create if needed")
                     token_needs_creation = True
             
+            # Rotate token if secret is invalid
+            if token_needs_rotation:
+                log_step("Rotating Proxmox token to get valid secret...")
+                try:
+                    result = run_cmd(
+                        [
+                            sys.executable,
+                            str(self.project_root / "scripts" / "proxmox_token.py"),
+                            proxmox_host,
+                            proxmox_ssh_user,
+                            proxmox_pve_user,
+                            proxmox_token_name,
+                            "--rotate"
+                        ],
+                        capture=True,
+                        check=False
+                    )
+                    if result.returncode == 0:
+                        try:
+                            # Extract JSON line from output (last line with {)
+                            json_line = None
+                            for line in result.stdout.strip().split('\n'):
+                                if line.strip().startswith('{'):
+                                    json_line = line.strip()
+                            if not json_line:
+                                log_error(f"No JSON found in output: {result.stdout}")
+                                return False
+                            token_data = json.loads(json_line)
+                            token_id = token_data.get("token_id", "")
+                            token_secret = token_data.get("token_secret", "")
+                            if token_id and token_secret:
+                                write_tfvars("pm_api_token_id", token_id)
+                                write_tfvars("pm_api_token_secret", token_secret)
+                                log_info(f"Rotated and saved Proxmox token: {token_id}")
+                            else:
+                                log_error("Failed to parse rotated token")
+                                return False
+                        except json.JSONDecodeError as e:
+                            log_error(f"Rotated token output is not valid JSON: {e}")
+                            log_error(f"Output: {result.stdout}")
+                            return False
+                    else:
+                        log_error(f"Could not rotate token: {result.stdout}")
+                        return False
+                except Exception as e:
+                    log_error(f"Could not rotate Proxmox token: {e}")
+                    return False
+            
             # Create token if needed
-            if token_needs_creation:
+            elif token_needs_creation:
                 log_step("Creating Proxmox token...")
                 try:
                     result = run_cmd(
@@ -497,9 +711,16 @@ class Deployer:
                         check=False
                     )
                     if result.returncode == 0:
-                        # Parse token from JSON output
+                        # Parse token from JSON output (extract JSON line)
                         try:
-                            token_data = json.loads(result.stdout)
+                            json_line = None
+                            for line in result.stdout.strip().split('\n'):
+                                if line.strip().startswith('{'):
+                                    json_line = line.strip()
+                            if not json_line:
+                                log_error(f"No JSON found in output: {result.stdout}")
+                                return False
+                            token_data = json.loads(json_line)
                             token_id = token_data.get("token_id", "")
                             token_secret = token_data.get("token_secret", "")
                             if token_id and token_secret and token_secret != "SECRET_NOT_AVAILABLE":
@@ -671,20 +892,21 @@ class Deployer:
         # 1. Remove Infisical provider resources from state (avoid auth errors)
         log_info("Removing Infisical resources from state...")
         infisical_resources = [
-            "infisical_secret.proxmox_token_id[0]",
-            "infisical_secret.proxmox_token_secret[0]",
-            "infisical_secret.postgres_password[0]",
-            "infisical_secret.encryption_key[0]",
-            "infisical_secret.jwt_signing_key[0]",
-            "infisical_secret.admin_password[0]",
-            "infisical_project_environment.production[0]",
-            "infisical_project.selfhost[0]",
-            "infisical_identity_universal_auth_client_secret.terraform_controller[0]",
-            "infisical_identity_universal_auth.terraform_controller[0]",
-            "infisical_identity.terraform_controller[0]",
-            "local_file.infisical_credentials[0]",
-            "null_resource.bootstrap_infisical[0]",
-            "null_resource.proxmox_token[0]",
+            "module.infisical.infisical_secret.proxmox_token_id[0]",
+            "module.infisical.infisical_secret.proxmox_token_secret[0]",
+            "module.infisical.infisical_secret.client_id[0]",
+            "module.infisical.infisical_secret.client_secret[0]",
+            "module.infisical.infisical_secret.postgres_password[0]",
+            "module.infisical.infisical_secret.encryption_key[0]",
+            "module.infisical.infisical_secret.jwt_signing_key[0]",
+            "module.infisical.infisical_secret.admin_password[0]",
+            "module.infisical.infisical_project_environment.production[0]",
+            "module.infisical.infisical_project.main[0]",
+            "module.infisical.infisical_identity_universal_auth_client_secret.terraform_controller[0]",
+            "module.infisical.infisical_identity_universal_auth.terraform_controller[0]",
+            "module.infisical.infisical_identity.terraform_controller[0]",
+            "module.infisical.null_resource.bootstrap[0]",
+            "module.infisical.null_resource.proxmox_token_cleanup[0]",
         ]
         for resource in infisical_resources:
             run_cmd(

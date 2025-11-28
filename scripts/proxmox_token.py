@@ -92,12 +92,13 @@ def create_token(
                 remove_token(proxmox_host, ssh_user, full_token_id)
     
     # Create new token (pveum will fail if token exists and we're not rotating)
+    # --privsep=0 gives the token full privileges of the user (no separate ACLs needed)
     log_info(f"Creating Proxmox token: {pve_user}!{token_name}")
     try:
         cmd = [
             "ssh", "-o", "StrictHostKeyChecking=no",
             f"{ssh_user}@{proxmox_host}",
-            f"pveum user token add {pve_user} {token_name} --output-format json"
+            f"pveum user token add {pve_user} {token_name} --privsep 0 --output-format json"
         ]
         result = run_cmd(cmd, capture=True, check=True)
         
@@ -140,6 +141,12 @@ def create_token(
 
 def main():
     """Main entry point."""
+    import os
+    
+    # Check if called from Terraform external data source (via environment variables)
+    # Terraform passes query parameters as environment variables
+    rotate_env = os.getenv("rotate", "false").lower() == "true"
+    
     if len(sys.argv) < 5:
         print(__doc__)
         sys.exit(1)
@@ -148,7 +155,7 @@ def main():
     ssh_user = sys.argv[2]
     pve_user = sys.argv[3]
     token_name = sys.argv[4]
-    rotate = "--rotate" in sys.argv
+    rotate = "--rotate" in sys.argv or rotate_env
     
     # Create or rotate token
     # If token exists and we're not rotating, create_token will fail with clear error

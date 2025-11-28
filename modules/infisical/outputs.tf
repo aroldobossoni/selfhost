@@ -58,3 +58,15 @@ output "project_id" {
   description = "Infisical project ID"
   value       = var.enabled && length(infisical_project.main) > 0 ? infisical_project.main[0].id : ""
 }
+
+output "client_id" {
+  description = "Infisical Machine Identity Client ID"
+  value       = var.enabled && local.bootstrap_complete && length(infisical_identity_universal_auth_client_secret.terraform_controller) > 0 ? infisical_identity_universal_auth_client_secret.terraform_controller[0].client_id : ""
+  sensitive   = true
+}
+
+output "client_secret" {
+  description = "Infisical Machine Identity Client Secret"
+  value       = var.enabled && local.bootstrap_complete && length(infisical_identity_universal_auth_client_secret.terraform_controller) > 0 ? infisical_identity_universal_auth_client_secret.terraform_controller[0].client_secret : ""
+  sensitive   = true
+}

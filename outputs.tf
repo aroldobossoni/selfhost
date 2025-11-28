@@ -48,3 +48,15 @@ output "infisical_admin_password" {
   value       = module.infisical.admin_password
   sensitive   = true
 }
+
+output "infisical_client_id" {
+  description = "Infisical Machine Identity Client ID"
+  value       = module.infisical.client_id
+  sensitive   = true
+}
+
+output "infisical_client_secret" {
+  description = "Infisical Machine Identity Client Secret"
+  value       = module.infisical.client_secret
+  sensitive   = true
+}

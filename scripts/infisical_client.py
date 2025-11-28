@@ -186,3 +186,46 @@ class InfisicalClient:
         except RequestException:
             return False
 
+    def authenticate_universal(self, client_id: str, client_secret: str) -> Optional[str]:
+        """Authenticate using Universal Auth and return access token."""
+        try:
+            resp = requests.post(
+                f"{self.base_url}/api/v1/auth/universal-auth/login",
+                json={
+                    "clientId": client_id,
+                    "clientSecret": client_secret
+                },
+                timeout=10
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("accessToken") or data.get("token")
+            return None
+        except RequestException:
+            return None
+
+    def get_secret(self, project_id: str, env_slug: str, secret_name: str, access_token: str) -> Optional[str]:
+        """Get a secret value from Infisical."""
+        try:
+            headers = {"Authorization": f"Bearer {access_token}"}
+            resp = requests.get(
+                f"{self.base_url}/api/v3/secrets/{secret_name}",
+                headers=headers,
+                params={
+                    "workspaceId": project_id,
+                    "environment": env_slug
+                },
+                timeout=10
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                secret = data.get("secret", {})
+                return secret.get("secretValue") or secret.get("value")
+            return None
+        except RequestException:
+            return None
+
+    def check_secret_exists(self, project_id: str, env_slug: str, secret_name: str, access_token: str) -> bool:
+        """Check if a secret exists in Infisical."""
+        return self.get_secret(project_id, env_slug, secret_name, access_token) is not None
+
