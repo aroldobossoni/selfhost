@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.utils import (
     log_info, log_warn, log_error, log_step,
-    run_cmd, get_project_root, read_tfvars, write_tfvars,
+    run_cmd, get_project_root, read_tfvars,
     check_ssh, check_docker, terraform_output, ensure_ssh_key
 )
 from scripts.infisical_client import InfisicalClient
@@ -243,14 +243,8 @@ class Deployer:
 
         log_info("Credentials saved")
 
-    def set_enable_infisical(self, enabled: bool) -> None:
-        """Set enable_infisical in terraform.tfvars."""
-        value = "true" if enabled else "false"
-        write_tfvars("enable_infisical", value)
-        log_info(f"enable_infisical set to {value}")
-
     def get_enable_infisical(self) -> bool:
-        """Get current enable_infisical value."""
+        """Get current enable_infisical value from terraform.tfvars."""
         value = read_tfvars("enable_infisical")
         return value == "true" if value else False
 
@@ -261,8 +255,6 @@ class Deployer:
     def phase1(self) -> bool:
         """Phase 1: Deploy LXC container with Docker."""
         log_step("Phase 1: Deploying Docker LXC...")
-
-        self.set_enable_infisical(False)
 
         if not self.terraform_apply(target="module.docker_lxc"):
             return False
@@ -277,8 +269,6 @@ class Deployer:
 
         # Clean up any orphaned Docker resources first
         cleanup_docker_resources(docker_host, docker_ssh_user)
-
-        self.set_enable_infisical(True)
 
         # First apply with target
         if not self.terraform_apply(target="module.infisical", refresh=False):
@@ -483,19 +473,23 @@ class Deployer:
 
         log_info("Docker is available!")
 
-        # Phase 2: Deploy Infisical containers
-        if not self.phase2(docker_host, docker_ssh_user):
-            return False
+        # Phase 2-4: Only if Infisical is enabled
+        if self.get_enable_infisical():
+            # Phase 2: Deploy Infisical containers
+            if not self.phase2(docker_host, docker_ssh_user):
+                return False
 
-        # Phase 3: Bootstrap
-        if not self.has_credentials():
-            if not self.bootstrap():
-                log_warn("Bootstrap not completed. Run 'make bootstrap' when ready.")
-                return True
+            # Phase 3: Bootstrap
+            if not self.has_credentials():
+                if not self.bootstrap():
+                    log_warn("Bootstrap not completed. Run 'make bootstrap' when ready.")
+                    return True
 
-        # Phase 4: Apply Infisical resources
-        if not self.phase4(docker_host):
-            return False
+            # Phase 4: Apply Infisical resources
+            if not self.phase4(docker_host):
+                return False
+        else:
+            log_info("Infisical disabled (enable_infisical = false), skipping phases 2-4")
 
         print("\n" + "=" * 50)
         print("  Deployment Complete!")
