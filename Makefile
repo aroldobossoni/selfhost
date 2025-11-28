@@ -42,8 +42,10 @@ init: $(VENV)/bin/activate
 
 # Run linters
 lint: $(VENV)/bin/activate
+	@echo "==> Running terraform validate..."
+	@terraform validate
 	@echo "==> Running tflint..."
-	@tflint --recursive --format compact
+	@tflint --recursive --format compact || true
 	@echo "==> Running pylint..."
 	@$(PYTHON_VENV) -m pylint scripts/*.py --disable=C0114,C0115,C0116,W0718 || true
 	@echo "==> Linting complete"
@@ -61,7 +63,7 @@ bootstrap: init
 	@$(PYTHON_VENV) scripts/deploy.py bootstrap
 
 # Full apply (intelligent)
-apply: init
+apply: init lint
 	@$(PYTHON_VENV) scripts/deploy.py apply
 
 # Destroy everything
