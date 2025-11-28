@@ -1,212 +1,113 @@
 # Infisical Deployment Guide
 
-Este documento descreve o processo de deploy do Infisical em 3 fases.
+Deploy automatizado do Infisical via `make apply`.
 
-## Fase 1: Bootstrap via SSH
+## Pré-requisitos
 
-### Pré-requisitos
+1. Terraform >= 1.14.0
+2. Python 3.x com venv
+3. Acesso SSH ao Proxmox (chave configurada)
+4. Token API do Proxmox
 
-1. Container docker-lxc (ID 100) criado e rodando
-2. Docker instalado no container
-3. IP do container conhecido (obter via `terraform output docker_container_ip`)
-
-### Configuração
-
-1. Adicione as variáveis ao `terraform.tfvars`:
-
-```hcl
-docker_host_ip = "192.168.3.115"  # IP do container docker-lxc
-
-# Gerar encryption key: openssl rand -base64 32
-infisical_postgres_password = "seu-password-postgres"
-infisical_db_password       = "seu-password-db"
-infisical_encryption_key     = "sua-chave-base64-32-bytes"
-infisical_jwt_signing_key   = "sua-chave-jwt"
-```
-
-2. Inicialize e aplique:
+## Quick Start
 
 ```bash
-terraform init
-terraform plan
-terraform apply
+# 1. Configurar variáveis
+cp terraform.tfvars.example terraform.tfvars
+# Editar terraform.tfvars com suas credenciais
+
+# 2. Habilitar Infisical
+# Em terraform.tfvars:
+enable_infisical = true
+
+# 3. Deploy completo
+make apply
 ```
 
-3. Acesse Infisical:
+## Fluxo de Deploy
 
-```
-http://<docker-host-ip>:8080
-```
+O `make apply` executa automaticamente:
 
-### Verificação
+### Phase 1: LXC Container
+- Cria container LXC não-privilegiado
+- Instala Docker e SSH
+- Obtém IP via API Proxmox
+
+### Phase 2: Infisical Stack
+- PostgreSQL 15 (Alpine)
+- Redis 7 (Alpine)
+- Infisical (latest)
+
+### Phase 3: Bootstrap
+- Cria usuário admin
+- Cria organização
+- Gera token de acesso
+- Salva em `infisical_bootstrap.auto.tfvars`
+
+### Phase 4: Machine Identity
+- Cria Machine Identity para Terraform
+- Configura Universal Auth
+- Gera Client ID/Secret
+- Salva em `infisical_token.auto.tfvars`
+
+## Credenciais Auto-Geradas
+
+| Credential | Como obter |
+|------------|------------|
+| Docker LXC password | `terraform output docker_lxc_password` |
+| Infisical admin password | `terraform state pull \| jq ...` |
+| Infisical URL | `terraform output infisical_url` |
+| Container IP | `terraform output docker_container_ip` |
+
+## Verificação
 
 ```bash
-# Verificar containers
-ssh root@192.168.3.2 "pct exec 100 -- docker ps"
+# Status dos containers
+DOCKER_IP=$(terraform output -raw docker_container_ip)
+ssh root@$DOCKER_IP "docker ps"
 
-# Verificar logs
-ssh root@192.168.3.2 "pct exec 100 -- docker logs infisical"
+# Logs do Infisical
+ssh root@$DOCKER_IP "docker logs infisical --tail 50"
+
+# API status
+curl http://$DOCKER_IP:8080/api/status
 ```
 
----
+## Acesso Web
 
-## Fase 2: Geração de Certificados TLS
-
-### Objetivo
-
-Gerar certificados TLS para Docker daemon e Infisical usando Infisical como gerenciador central.
-
-### Passos
-
-1. Gerar certificados:
-
-```bash
-./scripts/generate_certs.sh ./certs 192.168.3.115
-```
-
-Isso cria:
-- `ca.pem`, `ca-key.pem` - Certificate Authority
-- `server.pem`, `server-key.pem` - Docker daemon server
-- `cert.pem`, `key.pem` - Docker client (Terraform)
-- `infisical.pem`, `infisical-key.pem` - Infisical HTTPS
-
-2. Armazenar certificados no Infisical:
-
-Após criar projeto e workspace no Infisical, adicione os certificados como secrets:
-
-```
-/certificates/
-├── ca.pem
-├── ca-key.pem
-├── docker-server.pem → server.pem
-├── docker-server-key.pem → server-key.pem
-├── docker-client.pem → cert.pem
-├── docker-client-key.pem → key.pem
-├── infisical-server.pem → infisical.pem
-└── infisical-server-key.pem → infisical-key.pem
-```
-
-3. Configurar Docker daemon para TLS:
-
-```bash
-./scripts/configure_docker_tls.sh 192.168.3.2 100 ./certs
-```
-
-Isso:
-- Copia certificados para `/etc/docker/`
-- Configura `daemon.json` para TLS na porta 2376
-- Reinicia Docker daemon
-
----
-
-## Fase 3: Migração para TLS
-
-### Objetivo
-
-Migrar toda comunicação para TCP+TLS, eliminando necessidade de SSH para operações normais.
-
-### Atualização do Terraform
-
-1. Atualizar `providers.tf`:
-
-```hcl
-provider "docker" {
-  host = "tcp://${var.docker_host_ip}:2376"
-  
-  # Certificados do Infisical (via data source)
-  cert_path = pathexpand("~/.docker/certs")
-  # ou usar certificados do Infisical diretamente
-}
-```
-
-2. Adicionar Infisical provider:
-
-```hcl
-provider "infisical" {
-  host = "https://${var.docker_host_ip}:8443"
-  client_id     = var.infisical_client_id
-  client_secret = var.infisical_client_secret
-}
-```
-
-3. Buscar certificados do Infisical:
-
-```hcl
-data "infisical_secrets" "docker_certs" {
-  env_slug     = "prod"
-  folder_path  = "/certificates"
-}
-
-# Usar certificados para Docker provider
-```
-
-### Configurar Infisical HTTPS
-
-1. Configurar Infisical para usar certificados TLS:
-
-Atualizar variáveis de ambiente do container Infisical:
-
-```hcl
-env = [
-  # ... outras variáveis
-  "TLS_CERT_PATH=/certs/infisical.pem",
-  "TLS_KEY_PATH=/certs/infisical-key.pem",
-  "SERVER_URL=https://192.168.3.115:8443"
-]
-```
-
-2. Mapear certificados como volume:
-
-```hcl
-volumes {
-  host_path      = "/etc/docker/infisical.pem"
-  container_path = "/certs/infisical.pem"
-}
-```
-
----
-
-## Resultado Final
-
-| Conexão | Protocolo | Porta | Autenticação |
-|---------|-----------|-------|--------------|
-| Terraform → Docker | TCP+TLS | 2376 | Certificados client |
-| Terraform → Infisical | HTTPS | 8443 | API Token |
-| Apps → Infisical | HTTPS | 8443 | API Token |
-
-### Vantagens
-
-- ✅ Comunicação encriptada end-to-end
-- ✅ Certificados gerenciados centralmente
-- ✅ Rotação automática via Infisical
-- ✅ Sem necessidade de SSH para operações normais
-- ✅ Audit trail completo
-
----
+- **URL**: `http://<docker_container_ip>:8080`
+- **Email**: Configurado em `infisical_admin_email`
+- **Senha**: Auto-gerada (ver `terraform state pull`)
 
 ## Troubleshooting
 
-### Docker daemon não inicia com TLS
-
-Verificar logs:
+### Container não inicia
 ```bash
-ssh root@192.168.3.2 "pct exec 100 -- journalctl -u docker"
+ssh root@192.168.3.2 "pct status 100"
+ssh root@192.168.3.2 "pct start 100"
 ```
 
-Verificar permissões dos certificados:
+### Docker não responde
 ```bash
-ssh root@192.168.3.2 "pct exec 100 -- ls -la /etc/docker/*.pem"
+ssh root@$DOCKER_IP "service docker status"
+ssh root@$DOCKER_IP "service docker start"
 ```
 
-### Infisical não acessível via HTTPS
-
-Verificar certificados no container:
+### Infisical não acessível
 ```bash
-ssh root@192.168.3.2 "pct exec 100 -- docker exec infisical ls -la /certs"
+ssh root@$DOCKER_IP "docker logs infisical"
+ssh root@$DOCKER_IP "docker logs infisical-postgres"
+ssh root@$DOCKER_IP "docker logs infisical-redis"
 ```
 
-Verificar variáveis de ambiente:
+## Destroy
+
 ```bash
-ssh root@192.168.3.2 "pct exec 100 -- docker exec infisical env | grep TLS"
+make destroy
 ```
 
+Remove:
+1. Recursos Infisical do state
+2. Containers Docker
+3. LXC container
+4. Arquivos `.auto.tfvars`

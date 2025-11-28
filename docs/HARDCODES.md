@@ -1,28 +1,43 @@
 # Relatório de Hardcodes no Projeto
 
-## ✅ Removidos
+## ✅ Credenciais Auto-Geradas
 
-- `docker_host_ip` - Agora obtido dinamicamente ou via configuração
-- `infisical_port` fallbacks - Agora obrigatório em terraform.tfvars
-- `localhost:8080` fallbacks - Removidos de todos os arquivos
+| Credential | Método | Rotação |
+|------------|--------|---------|
+| `docker_lxc_password` | `random_password` | A cada `terraform apply` (se destruído) |
+| `infisical_admin_password` | `random_password` | A cada `terraform apply` (se destruído) |
+| `postgres_password` | `random_password` | A cada `terraform apply` (se destruído) |
+| `encryption_key` | `random_bytes` | A cada `terraform apply` (se destruído) |
+| `jwt_signing_key` | `random_password` | A cada `terraform apply` (se destruído) |
+| `infisical_client_id` | Infisical API | Bootstrap automático |
+| `infisical_client_secret` | Infisical API | Bootstrap automático |
 
-## 📋 Configurações Centralizadas
+## ✅ Configurações Dinâmicas
 
-Todas as configurações estão em `terraform.tfvars`:
+| Variável | Método | Descrição |
+|----------|--------|-----------|
+| `docker_host_ip` | Proxmox API | Obtido via `/nodes/{node}/lxc/{vmid}/interfaces` |
+| `container_vmid` | Terraform | Retornado pelo provider Proxmox |
 
-| Variável | Descrição | Obrigatória |
-|----------|-----------|-------------|
-| `pm_api_url` | URL da API Proxmox | Sim |
+## ⚠️ Configurações Manuais (terraform.tfvars)
+
+| Variável | Descrição | Sensível |
+|----------|-----------|----------|
+| `pm_api_url` | URL da API Proxmox | Não |
 | `pm_api_token_id` | Token ID do Proxmox | Sim |
 | `pm_api_token_secret` | Secret do token | Sim |
-| `pm_host` | IP/hostname do Proxmox | Sim |
-| `docker_host_ip` | IP do container Docker | Não (dinâmico) |
-| `infisical_port` | Porta HTTP do Infisical | Sim |
-| `infisical_admin_email` | Email do admin | Sim |
-| `infisical_org_name` | Nome da organização | Sim |
+| `pm_host` | IP/hostname do Proxmox | Não |
+| `pm_node` | Nome do node Proxmox | Não |
+| `proxmox_ssh_user` | Usuário SSH (default: root) | Não |
+| `docker_ssh_user` | Usuário SSH do LXC (default: root) | Não |
+| `infisical_port` | Porta HTTP do Infisical | Não |
+| `infisical_admin_email` | Email do admin | Não |
+| `infisical_org_name` | Nome da organização | Não |
+| `infisical_project_name` | Nome do projeto | Não |
 
 ## 📝 Observações
 
-1. **Documentação**: IPs em arquivos de documentação são exemplos ilustrativos
-2. **Usuário root**: Necessário para SSH/Proxmox (não configurável)
-3. **Sem fallbacks**: Todas as configurações devem ser explícitas
+1. **Proxmox API Token**: Ainda é manual, mas está no roadmap para substituir por autenticação SSH
+2. **Documentação**: IPs em arquivos de documentação são exemplos ilustrativos
+3. **Sem fallbacks**: Todas as configurações obrigatórias devem ser explícitas
+4. **Arquivos .auto.tfvars**: Gerados automaticamente pelo bootstrap, ignorados pelo git

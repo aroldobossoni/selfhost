@@ -1,101 +1,135 @@
-# Selfhost - Stack Proxmox VE com Terraform
+# Selfhost - Proxmox VE Infrastructure as Code
 
 Infraestrutura como código para gerenciar serviços self-hosted no Proxmox VE utilizando Terraform.
 
-## Objetivo
+## Features
 
-Automatizar a implantação e gerenciamento de uma stack completa de serviços self-hosted no Proxmox VE, incluindo:
-
-- Argo CD
-- Key Vault
-- OPNsense
-- Authentik
-- Grafana
-- Docker
-
-Priorizando o uso de containers LXC para economizar recursos.
+- ✅ LXC containers não-privilegiados com Docker
+- ✅ Infisical (secrets management) com bootstrap automatizado
+- ✅ Credenciais auto-geradas (senhas, tokens, chaves)
+- ✅ IP dinâmico via DHCP (obtido automaticamente da API Proxmox)
+- ✅ Machine Identity com Universal Auth
+- ✅ Deploy orquestrado via Python
 
 ## Pré-requisitos
 
 - Terraform >= 1.14.0
-- Acesso SSH ao servidor Proxmox VE (root@192.168.3.2)
-- Token de API do Proxmox VE configurado
-- Chave SSH configurada para acesso ao Proxmox
+- Python 3.x
+- Acesso SSH ao Proxmox VE (chave configurada)
+- Token API do Proxmox VE
+
+## Quick Start
+
+```bash
+# 1. Clonar e configurar
+git clone <repo>
+cd selfhost
+cp terraform.tfvars.example terraform.tfvars
+
+# 2. Editar terraform.tfvars com suas credenciais Proxmox
+
+# 3. Deploy
+make apply
+```
 
 ## Estrutura do Projeto
 
 ```
 .
 ├── modules/
-│   └── docker_lxc/          # Módulo para criação de LXC com Docker
+│   ├── docker_lxc/           # LXC container com Docker
+│   └── infisical/            # Stack Infisical (PostgreSQL, Redis, Infisical)
+├── scripts/
+│   ├── deploy.py             # Orquestração principal
+│   ├── bootstrap_infisical.py # Bootstrap do Infisical
+│   ├── utils.py              # Utilitários
+│   ├── infisical_client.py   # Cliente API Infisical
+│   └── docker_client.py      # Cliente Docker via SSH
+├── docs/
+│   ├── ARCHITECTURE.md       # Diagramas e fluxos
+│   ├── HARDCODES.md          # Relatório de credenciais
+│   └── INFISICAL_DEPLOYMENT.md # Guia de deploy
 ├── main.tf                   # Configuração principal
-├── variables.tf              # Variáveis do projeto
-├── outputs.tf                # Outputs do projeto
-├── providers.tf              # Configuração dos providers
-├── versions.tf               # Versões do Terraform e providers
-└── terraform.tfvars.example  # Exemplo de variáveis
+├── random.tf                 # Geração de senhas
+├── data_container_ip.tf      # IP dinâmico via API
+├── bootstrap.tf              # Bootstrap Infisical
+├── infisical_identity.tf     # Machine Identity
+├── infisical_resources.tf    # Projetos e secrets
+└── Makefile                  # Comandos make
 ```
 
-## Uso Rápido
+## Comandos
 
-1. Copie o arquivo de exemplo de variáveis:
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   ```
+| Comando | Descrição |
+|---------|-----------|
+| `make apply` | Deploy completo (LXC + Infisical + Bootstrap) |
+| `make destroy` | Remove toda infraestrutura |
+| `make init` | Inicializa Terraform e dependências |
+| `make clean` | Remove arquivos temporários |
 
-2. Edite `terraform.tfvars` com suas credenciais do Proxmox:
-   - `pm_api_url`: URL da API do Proxmox (ex: https://192.168.3.2:8006/api2/json)
-   - `pm_api_token_id`: ID do token de API
-   - `pm_api_token_secret`: Secret do token de API
+## Credenciais Auto-Geradas
 
-3. Inicialize o Terraform:
-   ```bash
-   terraform init
-   ```
+| Credential | Descrição |
+|------------|-----------|
+| `docker_lxc_password` | Senha do container LXC |
+| `infisical_admin_password` | Senha do admin Infisical |
+| `postgres_password` | Senha do PostgreSQL |
+| `encryption_key` | Chave AES-256 |
+| `jwt_signing_key` | Chave JWT |
 
-4. Revise o plano de execução:
-   ```bash
-   terraform plan
-   ```
+Para ver uma credencial:
+```bash
+terraform output docker_lxc_password
+```
 
-5. Aplique a configuração:
-   ```bash
-   terraform apply
-   ```
+## Configuração
 
-## Criação do Token API no Proxmox
+Edite `terraform.tfvars`:
 
-1. Acesse a interface web do Proxmox VE
-2. Navegue até **Datacenter** > **Permissions** > **API Tokens**
-3. Clique em **Add** e crie um token para o usuário desejado
-4. Configure as permissões necessárias (geralmente Administrator role)
-5. Copie o `Token ID` e `Secret` para o arquivo `terraform.tfvars`
+```hcl
+# Proxmox
+pm_api_url          = "https://192.168.3.2:8006/api2/json"
+pm_api_token_id     = "user@pam!token"
+pm_api_token_secret = "your-secret"
+pm_node             = "proxmox"
+pm_host             = "192.168.3.2"
 
-**Nota**: O projeto usa containers LXC não-privilegiados com `nesting=1` habilitado, que podem ser criados com tokens de API normais (não requerem permissões especiais de root@pam).
+# SSH
+proxmox_ssh_user = "root"
+docker_ssh_user  = "root"
 
-## Módulos
+# Infisical
+enable_infisical      = true
+infisical_admin_email = "admin@example.com"
+infisical_org_name    = "MyOrg"
+infisical_port        = 8080
+```
 
-### docker_lxc
+## Outputs
 
-Módulo para criação de um container LXC com Docker instalado, baseado no script helper da comunidade Proxmox VE.
+```bash
+terraform output docker_container_ip    # IP do container
+terraform output infisical_url          # URL do Infisical
+terraform output docker_lxc_password    # Senha do LXC (sensitive)
+```
 
-**Variáveis principais:**
-- `hostname`: Nome do host do container
-- `cores`: Número de cores CPU
-- `memory`: Memória em MB
-- `storage`: Storage para o rootfs
-- `ostemplate`: Template do sistema operacional
+## Documentação
 
-## Próximos Passos
+- [Architecture](docs/ARCHITECTURE.md) - Diagramas e fluxos
+- [Infisical Deployment](docs/INFISICAL_DEPLOYMENT.md) - Guia detalhado
+- [Hardcodes Report](docs/HARDCODES.md) - Status das credenciais
 
-- [ ] Integração com Argo CD
-- [ ] Integração com Key Vault
-- [ ] Integração com OPNsense
-- [ ] Integração com Authentik
-- [ ] Integração com Grafana
+## Roadmap
+
+- [ ] Substituir API Token por autenticação SSH
+- [ ] Argo CD
+- [ ] Authentik (SSO)
+- [ ] Grafana + Prometheus
+- [ ] Backup automatizado
 
 ## Referências
 
 - [Proxmox VE Helper Scripts](https://community-scripts.github.io/ProxmoxVE/)
 - [Terraform Provider Proxmox](https://github.com/Telmate/terraform-provider-proxmox)
-
+- [Infisical Documentation](https://infisical.com/docs)
+- [Infisical Terraform Provider](https://registry.terraform.io/providers/Infisical/infisical)

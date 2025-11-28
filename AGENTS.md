@@ -1,99 +1,97 @@
 # AGENTS.md - Documentação para Agentes de IA
 
-Este documento fornece informações essenciais para agentes de IA trabalharem neste projeto de forma eficiente e com baixo consumo de tokens.
+Informações essenciais para agentes de IA trabalharem neste projeto.
 
 ## Contexto do Projeto
 
-Projeto de infraestrutura como código usando Terraform para gerenciar serviços self-hosted no Proxmox VE. O projeto prioriza modularização e fragmentação para facilitar o trabalho de agentes de IA.
+Infraestrutura como código usando Terraform para gerenciar serviços self-hosted no Proxmox VE.
 
-## Estrutura Modular
+## Estrutura
 
-O projeto está organizado em módulos independentes, cada um em seu próprio diretório:
+```
+modules/
+├── docker_lxc/     # LXC container com Docker (unprivileged)
+└── infisical/      # Stack Infisical (PostgreSQL, Redis, Infisical)
 
-- `modules/docker_lxc/`: Módulo para criação de LXC com Docker
-- Futuros módulos seguirão o mesmo padrão
+scripts/
+├── deploy.py       # Orquestração principal
+├── bootstrap_infisical.py
+├── utils.py
+├── infisical_client.py
+├── docker_client.py
+├── download_template.sh
+└── install_docker.sh
+```
 
-Cada módulo contém:
-- `variables.tf`: Definição de variáveis de entrada
-- `main.tf`: Recursos principais do módulo
-- `outputs.tf`: Outputs do módulo
+## Convenções
 
-## Convenções de Código
-
-- **Nomes**: Variáveis, recursos e outputs em inglês
-- **Comentários**: Em inglês, objetivos e decisões importantes
-- **Documentação**: Concisas, focadas em objetivos
-- **Modularização**: Priorizar módulos pequenos e focados
-
-## Informações Técnicas Importantes
-
-### Terraform
-- Versão mínima: 1.14.0
-- Provider Proxmox: `telmate/proxmox`
-- Backend: Local (pode ser configurado para remoto)
-
-### Proxmox VE
-- Servidor: 192.168.3.2
-- Acesso SSH: root@192.168.3.2 (chave SSH configurada)
-- API: Porta 8006 (HTTPS)
-
-### Docker LXC Module
-- Baseado no script helper: https://github.com/tteck/Proxmox/raw/main/ct/docker.sh
-- Container LXC privilegiado com nesting habilitado
-- Instala Docker, Docker Compose e Portainer (opcional)
-
-## Diretrizes para Agentes
-
-1. **Fragmentação**: Trabalhar em um módulo por vez quando possível
-2. **Leitura Seletiva**: Ler apenas arquivos relevantes ao contexto atual
-3. **Evitar Duplicação**: Verificar código existente antes de criar novo
-4. **Manter Modularidade**: Não acoplar módulos desnecessariamente
-5. **Documentação Concisa**: Comentários objetivos, sem verbosidade
-
-## Fluxo de Trabalho Recomendado
-
-1. Identificar o módulo/arquivo relevante
-2. Ler apenas os arquivos necessários do módulo
-3. Fazer alterações focadas
-4. Atualizar documentação se necessário
-5. Manter outputs e variáveis bem definidos
-
-## Variáveis Sensíveis
-
-Variáveis sensíveis (tokens, senhas) devem ser:
-- Definidas em `variables.tf`
-- Valores em `terraform.tfvars` (não versionado)
-- Exemplo em `terraform.tfvars.example`
-
-## Padrões de Nomenclatura
-
-- Recursos: `proxmox_lxc`, `proxmox_vm_qemu`
-- Variáveis: `snake_case`
-- Módulos: `snake_case` (diretório e nome)
-- Outputs: `snake_case`
+- **Idioma**: Código, variáveis e comentários em inglês
+- **Nomenclatura**: `snake_case` para tudo
+- **Modularização**: Módulos pequenos e focados
+- **Sem hardcode**: Usar variáveis e `random_password`
 
 ## Divisão de Responsabilidades
 
-O projeto segue uma separação clara entre Terraform e scripts Python:
-
 ### Terraform (prioridade)
 - Provisionar infraestrutura (LXC, Docker, containers)
-- Gerenciar recursos do Infisical (`infisical_identity`, `infisical_identity_universal_auth`, `infisical_identity_universal_auth_client_secret`, `infisical_project`, `infisical_secret`)
-- Configurar providers e módulos
-- Manter estado declarativo
+- Gerenciar recursos Infisical (`infisical_identity`, `infisical_project`, `infisical_secret`)
+- Gerar credenciais (`random_password`, `random_bytes`)
+- Obter IP dinâmico (`data.http` → Proxmox API)
 
 ### Python (scripts/)
-- **Bootstrap inicial**: Apenas para operações que não têm resource no Terraform (ex: `/api/v1/admin/bootstrap` do Infisical)
-- **Orquestração**: `deploy.py` coordena fases e verifica dependências
-- **Utilitários**: Funções reutilizáveis em `utils.py`, `infisical_client.py`, `docker_client.py`
+- **Bootstrap**: Operações sem resource Terraform (ex: `/api/v1/admin/bootstrap`)
+- **Orquestração**: `deploy.py` coordena fases
+- **Utilitários**: Funções reutilizáveis
 
 ### Shell Scripts (mínimo)
-- Apenas para provisioners do Terraform que executam via `pct exec` no Proxmox
-- Mantidos em `scripts/`: `download_template.sh`, `install_docker.sh`
+- Apenas para provisioners que executam via `pct exec`
+- `download_template.sh`, `install_docker.sh`
 
 ### Regra Geral
-Sempre que existir um resource/data source no Terraform provider, usar Terraform ao invés de scripts. Scripts Python são usados apenas para:
-1. Bootstrap inicial de serviços (operações únicas sem resource equivalente)
-2. Orquestração de fases do deploy
-3. Verificação de dependências do sistema
+Sempre que existir um resource/data source no Terraform provider, usar Terraform. Scripts Python apenas para:
+1. Bootstrap inicial (operações únicas sem resource)
+2. Orquestração de fases
+3. Verificação de dependências
 
+## Credenciais
+
+| Tipo | Método |
+|------|--------|
+| Senhas | `random_password` em `random.tf` |
+| Chaves | `random_bytes` em `random.tf` |
+| IPs | `data.http` em `data_container_ip.tf` |
+| Tokens | Bootstrap → `.auto.tfvars` |
+
+**Nunca hardcode senhas ou tokens!**
+
+## Fluxo de Deploy
+
+1. `make apply` → `deploy.py`
+2. Phase 1: `module.docker_lxc` + `data.http.container_interfaces`
+3. Phase 2: `module.infisical`
+4. Phase 3: `null_resource.bootstrap_infisical` → `bootstrap_infisical.py`
+5. Phase 4: `infisical_identity.*` resources
+
+## Arquivos Importantes
+
+| Arquivo | Propósito |
+|---------|-----------|
+| `terraform.tfvars` | Configurações do usuário (não versionado) |
+| `*.auto.tfvars` | Gerados pelo bootstrap (não versionado) |
+| `random.tf` | Geração de todas as credenciais |
+| `data_container_ip.tf` | IP dinâmico via API Proxmox |
+| `bootstrap.tf` | Orquestração do bootstrap |
+
+## Testes
+
+Após alterações:
+```bash
+terraform validate
+terraform plan
+```
+
+Após deploy:
+```bash
+terraform output docker_container_ip
+curl http://<ip>:8080/api/status
+```
