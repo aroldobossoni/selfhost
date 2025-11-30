@@ -1,5 +1,8 @@
 # User configuration (contains secrets)
 my-vars.yml
 
+# OPNsense config (contains SSH keys and passwords)
+roles/opnsense/files/config.xml
+
 # Ansible cache
 .ansible_cache/
