@@ -1,0 +1,53 @@
+---
+# ============================================================================
+# OPNsense Ansible Role - Main Task Orchestrator
+# ============================================================================
+# This file orchestrates all tasks based on tags.
+# ============================================================================
+
+- name: Include Infisical secrets integration
+  ansible.builtin.include_tasks: infisical_secrets.yml
+  tags:
+    - always
+
+- name: Include ISO download tasks
+  ansible.builtin.include_tasks:
+    file: iso.yml
+    apply:
+      tags:
+        - iso
+        - deploy
+  tags:
+    - iso
+    - deploy
+
+- name: Include VM creation tasks
+  ansible.builtin.include_tasks:
+    file: vm_create.yml
+    apply:
+      tags:
+        - vm
+        - deploy
+  tags:
+    - vm
+    - deploy
+
+- name: Include configuration tasks
+  ansible.builtin.include_tasks:
+    file: configure.yml
+    apply:
+      tags:
+        - configure
+        - restore
+  tags:
+    - configure
+    - restore
+
+- name: Include update tasks
+  ansible.builtin.include_tasks:
+    file: update.yml
+    apply:
+      tags:
+        - update
+  tags:
+    - update

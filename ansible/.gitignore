@@ -1,0 +1,5 @@
+# User configuration (contains secrets)
+my-vars.yml
+
+# Ansible cache
+.ansible_cache/

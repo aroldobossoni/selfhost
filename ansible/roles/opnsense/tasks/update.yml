@@ -1,0 +1,226 @@
+---
+# ============================================================================
+# OPNsense Update Tasks
+# ============================================================================
+# Updates OPNsense with optional Proxmox snapshot before update.
+# ============================================================================
+
+- name: Set API base URL
+  ansible.builtin.set_fact:
+    _api_base: >-
+      {{ 'https' if opnsense_api_https else 'http' }}://{{ opnsense_api_host }}:{{ opnsense_api_port }}/api
+
+- name: Get VM ID for snapshot
+  when: opnsense_update_create_snapshot
+  block:
+    - name: Query Proxmox for VM by name
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/resources?type=vm"
+        method: GET
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_validate_certs }}"
+        return_content: true
+      register: _vms_response
+      delegate_to: localhost
+      when: proxmox_api_token_id | length > 0
+
+    - name: Find OPNsense VM ID
+      ansible.builtin.set_fact:
+        _opnsense_vmid: "{{ item.vmid }}"
+      loop: "{{ _vms_response.json.data }}"
+      when:
+        - item.name == vm_name
+        - _vms_response is defined
+
+    - name: Display VM ID
+      ansible.builtin.debug:
+        msg: "Found OPNsense VM ID: {{ _opnsense_vmid | default('Not found') }}"
+
+- name: Create snapshot before update
+  when:
+    - opnsense_update_create_snapshot
+    - _opnsense_vmid is defined
+  block:
+    - name: Generate snapshot name with timestamp
+      ansible.builtin.set_fact:
+        _snapshot_name: "{{ opnsense_snapshot_name }}-{{ ansible_date_time.iso8601_basic_short }}"
+
+    - name: Create Proxmox snapshot
+      ansible.builtin.uri:
+        url: >-
+          https://{{ proxmox_api_host }}:8006/api2/json/nodes/{{ proxmox_node }}/qemu/{{ _opnsense_vmid }}/snapshot
+        method: POST
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        body_format: form-urlencoded
+        body:
+          snapname: "{{ _snapshot_name }}"
+          description: "Pre-update snapshot created by Ansible"
+          vmstate: 0
+        validate_certs: "{{ proxmox_validate_certs }}"
+        status_code: [200]
+      register: _snapshot_result
+      delegate_to: localhost
+
+    - name: Display snapshot result
+      ansible.builtin.debug:
+        msg: "Snapshot '{{ _snapshot_name }}' created successfully"
+
+- name: Check for available updates
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/firmware/status"
+    method: GET
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    status_code: [200]
+  register: _firmware_status
+  delegate_to: localhost
+
+- name: Display current firmware status
+  ansible.builtin.debug:
+    msg: |
+      Current version: {{ _firmware_status.json.product_version | default('Unknown') }}
+      Updates available: {{ _firmware_status.json.status_msg | default('Unknown') }}
+
+- name: Check for package updates
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/firmware/check"
+    method: POST
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    body: "{}"
+    body_format: json
+    status_code: [200]
+  register: _check_result
+  delegate_to: localhost
+
+- name: Wait for update check to complete
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/firmware/upgradestatus"
+    method: GET
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    status_code: [200]
+  register: _upgrade_status
+  until: _upgrade_status.json.status == "done" or _upgrade_status.json.status == "error"
+  retries: 30
+  delay: 10
+  delegate_to: localhost
+  ignore_errors: true
+
+- name: Get available updates info
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/firmware/info"
+    method: GET
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    status_code: [200]
+  register: _firmware_info
+  delegate_to: localhost
+
+- name: Display available updates
+  ansible.builtin.debug:
+    msg: |
+      Firmware info:
+      {{ _firmware_info.json | to_nice_yaml }}
+
+- name: Perform firmware update
+  when: _firmware_info.json.upgrade_needs_reboot | default(false) or _firmware_info.json.updates | default(0) | int > 0
+  block:
+    - name: Start firmware update
+      ansible.builtin.uri:
+        url: "{{ _api_base }}/core/firmware/update"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_validate_certs }}"
+        body: "{}"
+        body_format: json
+        status_code: [200]
+      register: _update_result
+      delegate_to: localhost
+
+    - name: Wait for update to complete
+      ansible.builtin.uri:
+        url: "{{ _api_base }}/core/firmware/upgradestatus"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_validate_certs }}"
+        status_code: [200]
+      register: _upgrade_status
+      until: >-
+        _upgrade_status.json.status == "done" or
+        _upgrade_status.json.status == "error" or
+        _upgrade_status.json.status == "reboot"
+      retries: 60
+      delay: 30
+      delegate_to: localhost
+
+    - name: Reboot if required
+      ansible.builtin.uri:
+        url: "{{ _api_base }}/core/firmware/reboot"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_validate_certs }}"
+        body: "{}"
+        body_format: json
+        status_code: [200]
+      register: _reboot_result
+      delegate_to: localhost
+      when:
+        - opnsense_update_reboot
+        - _upgrade_status.json.status == "reboot" or _firmware_info.json.upgrade_needs_reboot | default(false)
+
+    - name: Wait for OPNsense to come back online
+      ansible.builtin.uri:
+        url: "{{ _api_base }}/core/firmware/status"
+        method: GET
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_validate_certs }}"
+        status_code: [200]
+      register: _status_check
+      until: _status_check.status == 200
+      retries: 30
+      delay: 20
+      delegate_to: localhost
+      when: _reboot_result is defined and _reboot_result is changed
+
+- name: Display final status
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/firmware/status"
+    method: GET
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    status_code: [200]
+  register: _final_status
+  delegate_to: localhost
+
+- name: Display update summary
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      OPNsense Update Complete
+      Current Version: {{ _final_status.json.product_version | default('Unknown') }}
+      Status: {{ _final_status.json.status_msg | default('Up to date') }}
+      {% if opnsense_update_create_snapshot and _snapshot_name is defined %}
+      Snapshot: {{ _snapshot_name }}
+      {% endif %}
+      ============================================================

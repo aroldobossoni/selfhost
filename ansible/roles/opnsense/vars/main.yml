@@ -1,0 +1,27 @@
+---
+# ============================================================================
+# OPNsense Ansible Role - Internal Variables
+# ============================================================================
+# These are computed variables, do not modify directly.
+# ============================================================================
+
+# Computed ISO filename
+_opnsense_iso_filename: >-
+  OPNsense-{{ _opnsense_resolved_version }}-{{ opnsense_iso_type }}-{{ opnsense_arch }}.iso
+_opnsense_iso_bz2_filename: "{{ _opnsense_iso_filename }}.bz2"
+_opnsense_iso_checksum_filename: "{{ _opnsense_iso_filename }}.bz2.sha256"
+
+# Computed ISO URLs
+_opnsense_iso_base_url: "{{ opnsense_mirror }}/{{ _opnsense_resolved_version }}"
+_opnsense_iso_bz2_url: "{{ _opnsense_iso_base_url }}/{{ _opnsense_iso_bz2_filename }}"
+_opnsense_iso_checksum_url: "{{ _opnsense_iso_base_url }}/{{ _opnsense_iso_checksum_filename }}"
+
+# Proxmox ISO path
+_proxmox_iso_full_path: "{{ proxmox_iso_path }}/{{ _opnsense_iso_filename }}"
+
+# OPNsense API base URL
+_opnsense_api_base_url: >-
+  {{ 'https' if opnsense_api_https else 'http' }}://{{ opnsense_api_host }}:{{ opnsense_api_port }}/api
+
+# VM configuration
+_vm_id_resolved: "{{ vm_id | default(_discovered_vm_id, true) }}"

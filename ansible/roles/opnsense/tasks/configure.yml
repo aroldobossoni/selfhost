@@ -1,0 +1,130 @@
+---
+# ============================================================================
+# OPNsense Configuration via API
+# ============================================================================
+# Configures OPNsense after installation using the REST API.
+# ============================================================================
+
+- name: Set API base URL
+  ansible.builtin.set_fact:
+    _api_base: >-
+      {{ 'https' if opnsense_api_https else 'http' }}://{{ opnsense_api_host }}:{{ opnsense_api_port }}/api
+
+- name: Wait for OPNsense API to be available
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/firmware/status"
+    method: GET
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    status_code: [200, 401, 403]
+  register: _api_check
+  until: _api_check.status in [200, 401, 403]
+  retries: "{{ (timeout_api_wait / 10) | int }}"
+  delay: 10
+  delegate_to: localhost
+  ignore_errors: true
+
+- name: Check if API credentials are configured
+  ansible.builtin.fail:
+    msg: |
+      OPNsense API is not accessible or credentials are not configured.
+      Please ensure:
+      1. OPNsense is installed and running
+      2. API keys are created in System > Access > Users
+      3. opnsense_api_key and opnsense_api_secret are set
+  when: _api_check.status is not defined or _api_check.status not in [200]
+
+- name: Restore configuration from config.xml
+  when: opnsense_restore_config
+  block:
+    - name: Check if config.xml exists locally
+      ansible.builtin.stat:
+        path: "{{ role_path }}/files/{{ opnsense_config_file }}"
+      register: _config_file
+      delegate_to: localhost
+
+    - name: Read config.xml content
+      ansible.builtin.slurp:
+        src: "{{ role_path }}/files/{{ opnsense_config_file }}"
+      register: _config_content
+      delegate_to: localhost
+      when: _config_file.stat.exists
+
+    - name: Restore configuration via API
+      ansible.builtin.uri:
+        url: "{{ _api_base }}/core/backup/restore"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_validate_certs }}"
+        body_format: form-multipart
+        body:
+          conffile:
+            content: "{{ _config_content.content | b64decode }}"
+            filename: "config.xml"
+            mime_type: "application/xml"
+        status_code: [200]
+      register: _restore_result
+      delegate_to: localhost
+      when: _config_file.stat.exists
+
+    - name: Display restore result
+      ansible.builtin.debug:
+        msg: "Configuration restored: {{ _restore_result.json | default('success') }}"
+      when: _config_file.stat.exists and _restore_result is defined
+
+    - name: Warn if config.xml not found
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Config file not found at {{ role_path }}/files/{{ opnsense_config_file }}
+          Place your backup config.xml in the files directory to restore it.
+      when: not _config_file.stat.exists
+
+- name: Apply configuration and reload services
+  when: opnsense_restore_config and _config_file.stat.exists | default(false)
+  block:
+    - name: Reload all services
+      ansible.builtin.uri:
+        url: "{{ _api_base }}/core/service/restart/all"
+        method: POST
+        user: "{{ opnsense_api_key }}"
+        password: "{{ opnsense_api_secret }}"
+        force_basic_auth: true
+        validate_certs: "{{ opnsense_api_validate_certs }}"
+        body: "{}"
+        body_format: json
+        status_code: [200]
+      register: _reload_result
+      delegate_to: localhost
+      ignore_errors: true
+
+    - name: Wait for services to restart
+      ansible.builtin.pause:
+        seconds: 30
+      when: _reload_result is changed  # noqa: no-handler
+
+- name: Get current system information
+  ansible.builtin.uri:
+    url: "{{ _api_base }}/core/system/status"
+    method: GET
+    user: "{{ opnsense_api_key }}"
+    password: "{{ opnsense_api_secret }}"
+    force_basic_auth: true
+    validate_certs: "{{ opnsense_api_validate_certs }}"
+    status_code: [200]
+  register: _system_status
+  delegate_to: localhost
+  ignore_errors: true
+
+- name: Display system status
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      OPNsense Configuration Complete
+      System Status: {{ _system_status.json | default('Unknown') }}
+      API Host: {{ opnsense_api_host }}
+      ============================================================
+  when: _system_status is defined

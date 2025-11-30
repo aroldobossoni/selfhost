@@ -1,0 +1,7 @@
+{# Proxmox VM additional arguments template #}
+{# PCI Passthrough devices #}
+{% for pci in pci_passthrough %}
+-device vfio-pci,host={{ pci.id }}{% if pci.rombar is defined %},rombar={{ pci.rombar }}{% endif %}
+
+{% endfor %}
+

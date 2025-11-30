@@ -1,0 +1,126 @@
+---
+# ============================================================================
+# OPNsense ISO Download and Verification
+# ============================================================================
+# Downloads the OPNsense ISO, verifies SHA256, and uploads to Proxmox.
+# ============================================================================
+
+- name: Determine OPNsense version
+  when: opnsense_version == "latest"
+  block:
+    - name: Fetch OPNsense releases page
+      ansible.builtin.uri:
+        url: "{{ opnsense_mirror_index }}"
+        return_content: true
+        validate_certs: true
+      register: _releases_page
+      delegate_to: localhost
+
+    - name: Parse latest version from releases page
+      ansible.builtin.set_fact:
+        _opnsense_resolved_version: >-
+          {{ _releases_page.content | regex_findall('href="([0-9]+\.[0-9]+)/"') | sort | last }}
+      failed_when: _opnsense_resolved_version | length == 0
+
+    - name: Display resolved version
+      ansible.builtin.debug:
+        msg: "Resolved OPNsense version: {{ _opnsense_resolved_version }}"
+
+- name: Use specified version
+  when: opnsense_version != "latest"
+  ansible.builtin.set_fact:
+    _opnsense_resolved_version: "{{ opnsense_version }}"
+
+- name: Set ISO filenames and URLs
+  ansible.builtin.set_fact:
+    _iso_filename: >-
+      OPNsense-{{ _opnsense_resolved_version }}-{{ opnsense_iso_type }}-{{ opnsense_arch }}.iso
+    _iso_bz2_filename: >-
+      OPNsense-{{ _opnsense_resolved_version }}-{{ opnsense_iso_type }}-{{ opnsense_arch }}.iso.bz2
+
+- name: Set ISO URLs
+  ansible.builtin.set_fact:
+    _iso_base_url: "{{ opnsense_mirror }}/{{ _opnsense_resolved_version }}"
+    _iso_bz2_url: "{{ opnsense_mirror }}/{{ _opnsense_resolved_version }}/{{ _iso_bz2_filename }}"
+    _iso_checksum_url: "{{ opnsense_mirror }}/{{ _opnsense_resolved_version }}/{{ _iso_bz2_filename }}.sha256"
+    _proxmox_iso_path: "{{ proxmox_iso_path }}/{{ _iso_filename }}"
+
+- name: Check if ISO already exists on Proxmox
+  ansible.builtin.stat:
+    path: "{{ _proxmox_iso_path }}"
+  register: _iso_stat
+  delegate_to: proxmox_host
+  become: true
+
+- name: ISO download and extraction
+  when: not _iso_stat.stat.exists
+  become: true
+  block:
+    - name: Create temporary directory for ISO download
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: opnsense_iso_
+      register: _temp_dir
+      delegate_to: proxmox_host
+
+    - name: Download SHA256 checksum file
+      ansible.builtin.get_url:
+        url: "{{ _iso_checksum_url }}"
+        dest: "{{ _temp_dir.path }}/{{ _iso_bz2_filename }}.sha256"
+        mode: "0644"
+        timeout: 60
+      register: _checksum_download
+      delegate_to: proxmox_host
+
+    - name: Read SHA256 checksum
+      ansible.builtin.slurp:
+        src: "{{ _temp_dir.path }}/{{ _iso_bz2_filename }}.sha256"
+      register: _checksum_content
+      delegate_to: proxmox_host
+
+    - name: Parse SHA256 checksum
+      ansible.builtin.set_fact:
+        _expected_checksum: "{{ (_checksum_content.content | b64decode).split()[0] }}"
+
+    - name: Display expected checksum
+      ansible.builtin.debug:
+        msg: "Expected SHA256: {{ _expected_checksum }}"
+
+    - name: Download OPNsense ISO (compressed)
+      ansible.builtin.get_url:
+        url: "{{ _iso_bz2_url }}"
+        dest: "{{ _temp_dir.path }}/{{ _iso_bz2_filename }}"
+        mode: "0644"
+        timeout: "{{ timeout_iso_download }}"
+        checksum: "sha256:{{ _expected_checksum }}"
+      register: _iso_download
+      delegate_to: proxmox_host
+
+    - name: Decompress ISO
+      ansible.builtin.command:
+        cmd: "bunzip2 -k {{ _temp_dir.path }}/{{ _iso_bz2_filename }}"
+        creates: "{{ _temp_dir.path }}/{{ _iso_filename }}"
+      delegate_to: proxmox_host
+
+    - name: Move ISO to Proxmox storage
+      ansible.builtin.copy:
+        src: "{{ _temp_dir.path }}/{{ _iso_filename }}"
+        dest: "{{ _proxmox_iso_path }}"
+        mode: "0644"
+        remote_src: true
+      delegate_to: proxmox_host
+
+    - name: Cleanup temporary directory
+      ansible.builtin.file:
+        path: "{{ _temp_dir.path }}"
+        state: absent
+      delegate_to: proxmox_host
+
+- name: Display ISO status
+  ansible.builtin.debug:
+    msg: >-
+      {% if _iso_stat.stat.exists %}
+      ISO already exists at {{ _proxmox_iso_path }}
+      {% else %}
+      ISO downloaded and extracted to {{ _proxmox_iso_path }}
+      {% endif %}

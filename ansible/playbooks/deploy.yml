@@ -1,0 +1,66 @@
+---
+# ============================================================================
+# OPNsense Deploy Playbook
+# ============================================================================
+# Full deployment: ISO download, VM creation, and configuration.
+#
+# Usage:
+#   # Download ISO and create VM (first time)
+#   ansible-playbook playbooks/deploy.yml --tags iso,vm
+#
+#   # Configure after manual installation
+#   ansible-playbook playbooks/deploy.yml --tags configure
+#
+#   # Full deploy (all steps)
+#   ansible-playbook playbooks/deploy.yml --tags iso,vm,configure
+# ============================================================================
+
+- name: Deploy OPNsense on Proxmox
+  hosts: localhost
+  gather_facts: true
+  become: false  # API calls don't need sudo
+
+  pre_tasks:
+    - name: Debug proxmox_api_token_id
+      ansible.builtin.debug:
+        msg: "Token ID: '{{ proxmox_api_token_id | default('NOT SET') }}'"
+
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - proxmox_api_host is defined
+          - proxmox_api_host | length > 0
+          - proxmox_node is defined
+        fail_msg: "Required Proxmox variables are not defined"
+
+    - name: Validate Proxmox authentication
+      ansible.builtin.assert:
+        that:
+          - (proxmox_api_password is defined and proxmox_api_password | length > 0) or
+            (proxmox_api_token_id is defined and proxmox_api_token_id | length > 0)
+        fail_msg: "Either proxmox_api_password or proxmox_api_token_id must be defined"
+
+  roles:
+    - role: opnsense
+
+  post_tasks:
+    - name: Deployment summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          OPNsense Deployment Summary
+          ============================================================
+          VM Name: {{ vm_name }}
+          Proxmox Node: {{ proxmox_node }}
+          OPNsense Version: {{ _opnsense_resolved_version | default(opnsense_version) }}
+          Network Configuration:
+            - PCI Passthrough (WAN): {{ pci_passthrough | length }} ports
+            - Virtual NIC (LAN): {{ vm_net_lan.bridge }} ({{ vm_net_lan.model }})
+          Next Steps:
+          1. If VM was just created, complete manual installation
+          2. Configure OPNsense initial settings via console
+          3. Create API keys in System > Access > Users
+          4. Run: ansible-playbook playbooks/deploy.yml --tags configure
+          ============================================================
+      tags:
+        - always

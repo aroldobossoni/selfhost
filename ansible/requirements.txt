@@ -1,0 +1,15 @@
+# Python dependencies for Ansible OPNsense role
+# Install with: pip install -r requirements.txt
+
+# Ansible itself (install in venv, not system!)
+ansible>=10.0.0
+
+# Linting
+ansible-lint>=25.0.0
+
+# Required by community.general.proxmox_kvm module
+proxmoxer>=2.0.0
+
+# Required by infisical.vault collection
+infisical-python>=1.0.0
+

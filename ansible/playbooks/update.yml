@@ -1,0 +1,64 @@
+---
+# ============================================================================
+# OPNsense Update Playbook
+# ============================================================================
+# Updates OPNsense with optional Proxmox snapshot.
+#
+# Usage:
+#   # Update with snapshot (default)
+#   ansible-playbook playbooks/update.yml
+#
+#   # Update without snapshot
+#   ansible-playbook playbooks/update.yml -e opnsense_update_create_snapshot=false
+#
+#   # Update without reboot
+#   ansible-playbook playbooks/update.yml -e opnsense_update_reboot=false
+# ============================================================================
+
+- name: Update OPNsense
+  hosts: localhost
+  gather_facts: true
+  become: false
+  vars_files:
+    - ../roles/opnsense/defaults/main.yml
+  vars:
+    # Load Infisical credentials from environment
+    infisical_client_id: "{{ lookup('env', 'INFISICAL_CLIENT_ID') | default(infisical_client_id, true) }}"
+    infisical_client_secret: "{{ lookup('env', 'INFISICAL_CLIENT_SECRET') | default(infisical_client_secret, true) }}"
+    infisical_project_id: "{{ lookup('env', 'INFISICAL_PROJECT_ID') | default(infisical_project_id, true) }}"
+
+  pre_tasks:
+    - name: Validate OPNsense API credentials
+      ansible.builtin.assert:
+        that:
+          - opnsense_api_key is defined
+          - opnsense_api_key | length > 0
+          - opnsense_api_secret is defined
+          - opnsense_api_secret | length > 0
+        fail_msg: "OPNsense API credentials are required for updates"
+
+    - name: Validate Proxmox credentials for snapshot
+      ansible.builtin.assert:
+        that:
+          - (proxmox_api_token_id is defined and proxmox_api_token_id | length > 0) or
+            not opnsense_update_create_snapshot
+        fail_msg: "Proxmox API token required for creating snapshots"
+      when: opnsense_update_create_snapshot | default(true)
+
+  tasks:
+    - name: Include update tasks
+      ansible.builtin.include_role:
+        name: opnsense
+        tasks_from: update.yml
+
+  post_tasks:
+    - name: Update complete
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          OPNsense Update Complete
+          ============================================================
+          Host: {{ opnsense_api_host }}
+          Snapshot Created: {{ opnsense_update_create_snapshot | default(true) }}
+          Reboot Performed: {{ opnsense_update_reboot | default(true) }}
+          ============================================================

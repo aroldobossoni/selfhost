@@ -1,0 +1,3 @@
+# Place your OPNsense config.xml backup file here
+# Filename should match: opnsense_config_file variable (default: config.xml)
+

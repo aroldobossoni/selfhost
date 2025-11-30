@@ -1,0 +1,68 @@
+---
+# ============================================================================
+# OPNsense Restore Playbook
+# ============================================================================
+# Restores OPNsense configuration from config.xml.
+#
+# Usage:
+#   # Restore default config.xml
+#   ansible-playbook playbooks/restore.yml
+#
+#   # Restore specific config file
+#   ansible-playbook playbooks/restore.yml -e opnsense_config_file=my-backup.xml
+# ============================================================================
+
+- name: Restore OPNsense Configuration
+  hosts: localhost
+  gather_facts: true
+  become: false
+  vars_files:
+    - ../roles/opnsense/defaults/main.yml
+  vars:
+    opnsense_restore_config: true
+    # Load Infisical credentials from environment
+    infisical_client_id: "{{ lookup('env', 'INFISICAL_CLIENT_ID') | default(infisical_client_id, true) }}"
+    infisical_client_secret: "{{ lookup('env', 'INFISICAL_CLIENT_SECRET') | default(infisical_client_secret, true) }}"
+    infisical_project_id: "{{ lookup('env', 'INFISICAL_PROJECT_ID') | default(infisical_project_id, true) }}"
+
+  pre_tasks:
+    - name: Validate OPNsense API credentials
+      ansible.builtin.assert:
+        that:
+          - opnsense_api_key is defined
+          - opnsense_api_key | length > 0
+          - opnsense_api_secret is defined
+          - opnsense_api_secret | length > 0
+        fail_msg: "OPNsense API credentials are required"
+
+    - name: Check if config file exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../roles/opnsense/files/{{ opnsense_config_file }}"
+      register: _config_check
+
+    - name: Fail if config file not found
+      ansible.builtin.fail:
+        msg: |
+          Config file not found: roles/opnsense/files/{{ opnsense_config_file }}
+          Please copy your OPNsense config.xml backup to:
+          {{ playbook_dir }}/../roles/opnsense/files/{{ opnsense_config_file }}
+      when: not _config_check.stat.exists
+
+  tasks:
+    - name: Include configure tasks
+      ansible.builtin.include_role:
+        name: opnsense
+        tasks_from: configure.yml
+
+  post_tasks:
+    - name: Restore complete
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          OPNsense Configuration Restored
+          ============================================================
+          Config File: {{ opnsense_config_file }}
+          Host: {{ opnsense_api_host }}
+          Note: Some services may need manual restart.
+          Access OPNsense at: https://{{ opnsense_api_host }}
+          ============================================================

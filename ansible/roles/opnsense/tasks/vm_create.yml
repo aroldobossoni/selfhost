@@ -1,0 +1,192 @@
+---
+# ============================================================================
+# OPNsense VM Creation on Proxmox
+# ============================================================================
+# Creates a VM with PCI passthrough for network interfaces.
+# ============================================================================
+
+# First, check if VM already exists
+- name: Get list of existing VMs
+  ansible.builtin.uri:
+    url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/resources?type=vm"
+    method: GET
+    headers:
+      Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_validate_certs }}"
+    return_content: true
+  register: _vms_list
+  delegate_to: localhost
+
+- name: Check if VM with name already exists
+  ansible.builtin.set_fact:
+    _existing_vm: "{{ _vms_list.json.data | selectattr('name', 'defined') | selectattr('name', 'equalto', vm_name) | list | first | default({}) }}"
+
+- name: Set VM ID from existing VM
+  ansible.builtin.set_fact:
+    _vm_id: "{{ _existing_vm.vmid }}"
+    _vm_exists: true
+    _vm_status: "{{ _existing_vm.status | default('unknown') }}"
+  when: _existing_vm.vmid is defined
+
+- name: Display existing VM info
+  ansible.builtin.debug:
+    msg: "VM '{{ vm_name }}' already exists with ID {{ _vm_id }}, status: {{ _vm_status }}"
+  when: _vm_exists | default(false)
+
+# Get next available VM ID only if VM doesn't exist
+- name: Get next available VM ID
+  when: not (_vm_exists | default(false))
+  block:
+    - name: Query Proxmox API for next VM ID
+      ansible.builtin.uri:
+        url: "https://{{ proxmox_api_host }}:8006/api2/json/cluster/nextid"
+        method: GET
+        headers:
+          Authorization: "PVEAPIToken={{ proxmox_api_user }}!{{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_validate_certs }}"
+        return_content: true
+      register: _nextid_response
+      delegate_to: localhost
+
+    - name: Set new VM ID
+      ansible.builtin.set_fact:
+        _vm_id: "{{ _nextid_response.json.data }}"
+        _vm_exists: false
+
+    - name: Display new VM ID
+      ansible.builtin.debug:
+        msg: "Will create new VM with ID: {{ _vm_id }}"
+
+# Prepare VM configuration
+- name: Ensure ISO filename is set
+  ansible.builtin.set_fact:
+    _iso_filename: >-
+      OPNsense-{{ _opnsense_resolved_version | default(opnsense_version) }}-{{ opnsense_iso_type }}-{{ opnsense_arch }}.iso
+  when: _iso_filename is not defined
+
+- name: Initialize hostpci dict
+  ansible.builtin.set_fact:
+    _hostpci_dict: {}
+
+- name: Add each PCI device to hostpci config
+  ansible.builtin.set_fact:
+    _hostpci_dict: >-
+      {{ _hostpci_dict | combine({
+        'hostpci' ~ idx: 'host=' ~ item.id ~ ',rombar=' ~ (item.rombar | default(1))
+      }) }}
+  loop: "{{ pci_passthrough }}"
+  loop_control:
+    index_var: idx
+
+- name: Set scsi disk configuration
+  ansible.builtin.set_fact:
+    _scsi_disk: >-
+      {{ proxmox_storage_vm }}:{{ vm_disk_size | regex_replace('G', '') }},format={{ vm_disk_format }},cache={{ vm_disk_cache }},discard={{ vm_disk_discard }}
+
+- name: Build network config string
+  ansible.builtin.set_fact:
+    _net_config: >-
+      model={{ vm_net_lan.model }},bridge={{ vm_net_lan.bridge
+      }}{%- if vm_net_lan.macaddr | default('') %},macaddr={{ vm_net_lan.macaddr }}{% endif
+      %}{%- if vm_net_lan.tag | default('') %},tag={{ vm_net_lan.tag }}{% endif
+      %},firewall={{ vm_net_lan.firewall | default(false) | ternary(1, 0) }}
+
+# Create VM only if it doesn't exist
+- name: Create new VM
+  when: not (_vm_exists | default(false))
+  block:
+    - name: Check if password auth is needed for PCI passthrough
+      ansible.builtin.set_fact:
+        _use_password_auth: >-
+          {{ (pci_passthrough | length > 0) and (proxmox_api_password | default('') | length > 0) }}
+
+    - name: Warn if PCI passthrough requires password
+      ansible.builtin.fail:
+        msg: |
+          PCI passthrough requires password authentication (tokens can't configure unmapped PCI devices).
+          Set 'proxmox_api_password' in your vars file temporarily for VM creation.
+      when:
+        - pci_passthrough | length > 0
+        - proxmox_api_password | default('') | length == 0
+
+    - name: Create OPNsense VM on Proxmox
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_password: "{{ proxmox_api_password if _use_password_auth else omit }}"
+        api_token_id: "{{ omit if _use_password_auth else proxmox_api_token_id }}"
+        api_token_secret: "{{ omit if _use_password_auth else proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_validate_certs }}"
+        node: "{{ proxmox_node }}"
+        vmid: "{{ _vm_id }}"
+        name: "{{ vm_name }}"
+        description: "{{ vm_description }}"
+        cores: "{{ vm_cores }}"
+        sockets: "{{ vm_sockets }}"
+        memory: "{{ vm_memory }}"
+        balloon: "{{ vm_balloon }}"
+        cpu: "{{ vm_cpu_type }}"
+        bios: "{{ vm_bios }}"
+        machine: "{{ vm_machine }}"
+        scsihw: virtio-scsi-single
+        scsi:
+          scsi0: "{{ _scsi_disk }}"
+        ide:
+          ide2: "{{ proxmox_storage_iso }}:iso/{{ _iso_filename }},media=cdrom"
+        net:
+          net0: "{{ _net_config }}"
+        hostpci: "{{ _hostpci_dict }}"
+        boot: order=scsi0;ide2
+        efidisk0:
+          storage: "{{ proxmox_storage_vm }}"
+          format: "{{ vm_disk_format }}"
+          efitype: 4m
+          pre_enrolled_keys: false
+        onboot: "{{ vm_start_on_boot }}"
+        agent: 0
+        state: present
+      register: _vm_create
+      delegate_to: localhost
+      become: false
+
+    - name: Display VM creation result
+      ansible.builtin.debug:
+        msg: "VM {{ vm_name }} (ID: {{ _vm_id }}) created successfully"
+
+# Start VM if requested (works for both new and existing VMs)
+- name: Start VM
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password | default(omit) }}"
+    api_token_id: "{{ proxmox_api_token_id | default(omit) }}"
+    api_token_secret: "{{ proxmox_api_token_secret | default(omit) }}"
+    validate_certs: "{{ proxmox_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ _vm_id }}"
+    state: started
+  when: vm_start_after_create
+  delegate_to: localhost
+  become: false
+  register: _vm_start
+
+- name: Display VM start status
+  ansible.builtin.debug:
+    msg: >-
+      VM {{ vm_name }} (ID: {{ _vm_id }}) is now {{ 'running' if _vm_start.changed else 'already running' }}
+  when: vm_start_after_create
+
+- name: Installation instructions
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      VM {{ vm_name }} (ID: {{ _vm_id }}) is ready.
+      Status: {{ 'Started' if vm_start_after_create else 'Created (not started)' }}
+      Next steps:
+      1. Open Proxmox console for VM {{ _vm_id }}
+      2. Complete OPNsense installation
+      3. Configure initial network settings
+      4. Enable SSH access if needed
+      5. Create API keys in System > Access > Users
+      6. Run: ansible-playbook playbooks/deploy.yml --tags configure
+      ============================================================

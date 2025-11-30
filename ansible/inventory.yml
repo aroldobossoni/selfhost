@@ -1,0 +1,21 @@
+---
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  children:
+    proxmox:
+      hosts:
+        proxmox_host:
+          ansible_host: "{{ proxmox_api_host | default('192.168.3.2') }}"
+          ansible_user: root
+          ansible_python_interpreter: /usr/bin/python3
+    opnsense:
+      hosts:
+        opnsense_host:
+          ansible_host: "{{ opnsense_api_host | default('192.168.3.1') }}"
+          ansible_user: root
+          ansible_python_interpreter: /usr/local/bin/python3
+          # OPNsense uses FreeBSD
+          ansible_shell_type: csh

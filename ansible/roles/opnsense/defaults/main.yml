@@ -1,0 +1,104 @@
+---
+# ============================================================================
+# OPNsense Ansible Role - Default Configuration
+# ============================================================================
+# All settings can be overridden in playbooks, inventory, or extra vars.
+# Copy this file to customize for your environment.
+# ============================================================================
+
+# === OPNsense ISO ===
+opnsense_version: "latest"            # "latest" for dynamic fetch, or specific like "25.1"
+opnsense_arch: "amd64"
+opnsense_iso_type: "dvd"              # "dvd" or "vga" or "serial"
+opnsense_mirror: "https://mirror.ams1.nl.leaseweb.net/opnsense/releases"
+opnsense_mirror_index: "https://mirror.ams1.nl.leaseweb.net/opnsense/releases/"
+
+# === Proxmox Connection ===
+proxmox_node: "proxmox"
+proxmox_api_host: "192.168.3.2"
+proxmox_api_user: "root@pam"
+proxmox_api_password: ""              # Set via vault or environment variable
+proxmox_api_token_id: ""              # Token name only (e.g., "terraform", not "user!token")
+proxmox_api_token_secret: ""          # Alternative: API token secret
+proxmox_validate_certs: false
+
+# === Proxmox Storage ===
+proxmox_storage_iso: "local"
+proxmox_storage_vm: "local-zfs"
+proxmox_iso_path: "/var/lib/vz/template/iso"
+
+# === VM Hardware ===
+vm_id: null                           # null = auto-discover next available ID
+vm_name: "OPNsense"                   # Case sensitive
+vm_description: "OPNsense Firewall managed by Ansible"
+vm_cores: 2
+vm_sockets: 1
+vm_memory: 3072                       # MB
+vm_balloon: 1024                      # Minimum RAM (MB)
+vm_disk_size: "32G"
+vm_disk_format: "raw"                 # raw, qcow2, vmdk
+vm_disk_cache: "writeback"
+vm_disk_discard: "on"                 # TRIM support
+vm_bios: "ovmf"                       # ovmf (UEFI) or seabios (Legacy)
+vm_machine: "q35"                     # q35 or i440fx
+vm_cpu_type: "host"                   # host, kvm64, etc.
+vm_start_on_boot: true
+vm_start_after_create: false          # Keep off for manual installation
+
+# === Rede - PCI Passthrough (WAN) ===
+pci_passthrough:
+  - id: "0000:06:00.0"                # Port 1 (WAN primary)
+    rombar: 1
+  - id: "0000:06:00.1"                # Port 2
+    rombar: 1
+  - id: "0000:07:00.0"                # Port 3
+    rombar: 1
+  - id: "0000:07:00.1"                # Port 4
+    rombar: 1
+
+# === Rede - Bridge (LAN) ===
+vm_net_lan:
+  bridge: "vmbr0"
+  model: "e1000e"                     # e1000e, virtio, vmxnet3
+  tag: null                           # VLAN tag (optional)
+  firewall: false
+  macaddr: null                       # null = auto-generate
+
+# === OPNsense API ===
+opnsense_api_host: "192.168.3.1"
+opnsense_api_port: 443
+opnsense_api_https: true
+opnsense_api_validate_certs: false
+opnsense_api_key: ""                  # Set via vault
+opnsense_api_secret: ""               # Set via vault
+
+# === OPNsense Configuration ===
+opnsense_config_file: "config.xml"    # File in roles/opnsense/files/
+opnsense_restore_config: true         # Restore config.xml after install
+
+# === Update Settings ===
+opnsense_update_create_snapshot: true
+opnsense_snapshot_name: "pre-update"
+opnsense_update_reboot: true
+
+# === Timeouts ===
+timeout_iso_download: 1800            # 30 minutes
+timeout_vm_create: 300                # 5 minutes
+timeout_api_wait: 600                 # 10 minutes
+
+# === Infisical Integration ===
+infisical_enabled: true               # Enable Infisical secrets lookup
+infisical_url: "http://192.168.3.115:8080"  # Infisical server URL
+infisical_client_id: ""               # Universal Auth client ID (env: INFISICAL_CLIENT_ID)
+infisical_client_secret: ""           # Universal Auth client secret (env: INFISICAL_CLIENT_SECRET)
+infisical_project_id: ""              # Infisical project ID
+infisical_env_slug: "prod"            # Environment slug (dev, staging, prod)
+
+# Infisical secret paths and keys
+infisical_proxmox_path: "/proxmox"    # Path to Proxmox secrets
+infisical_proxmox_token_id_key: "PROXMOX_TOKEN_ID"
+infisical_proxmox_token_secret_key: "PROXMOX_TOKEN_SECRET"
+
+infisical_opnsense_path: "/opnsense"  # Path to OPNsense secrets (optional)
+infisical_opnsense_api_key_key: "OPNSENSE_API_KEY"
+infisical_opnsense_api_secret_key: "OPNSENSE_API_SECRET"

@@ -65,7 +65,7 @@ resource "docker_container" "redis" {
   command = [
     "redis-server",
     "--maxmemory", "48mb",
-    "--maxmemory-policy", "allkeys-lru"
+    "--maxmemory-policy", "noeviction"
   ]
 
   volumes {
